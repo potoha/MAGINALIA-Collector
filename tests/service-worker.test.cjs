@@ -438,12 +438,16 @@ test("only the extension capture page can close its own tab", async () => {
   assert.equal(rejected.ok, false);
 });
 
-test("capture page explicitly blocks saving and HTML capture until those paths exist", () => {
+test("capture page offers local browser holding without claiming Shelf save or Host delivery", () => {
   assert.doesNotMatch(captureHtml, /<form\b/i);
   assert.match(captureHtml, /id="save-html"[^>]*disabled/);
-  assert.match(captureHtml, /id="add-to-shelf"[^>]*disabled/);
+  assert.match(captureHtml, /id="add-to-shelf"[^>]*type="button"/);
+  assert.doesNotMatch(captureHtml, /id="add-to-shelf"[^>]*disabled/);
+  assert.match(captureHtml, /outbox\.js[\s\S]*capture\.js/);
   assert.match(captureHtml, /Private Shelf/);
-  assert.match(captureHtml, /保存連携は未接続です/);
+  assert.match(captureHtml, /Private Shelfへの保存完了を意味しません/);
+  assert.match(captureScript, /addPending\(/);
+  assert.match(captureScript, /Host未接続のため送信処理は行っていません/);
   assert.doesNotMatch(captureScript, /fetch\s*\(|XMLHttpRequest|storage\.(local|sync)|collector:save/i);
 });
 

@@ -7,13 +7,16 @@
 
 body {
   min-width: 300px;
+  max-width: 460px;
+  max-height: 620px;
   margin: 0;
   padding: 18px;
+  overflow: auto;
 }
 
 .panel {
   box-sizing: border-box;
-  max-width: 380px;
+  max-width: 460px;
   padding: 20px;
   border: 1px solid #ded9ce;
   border-radius: 12px;
@@ -64,4 +67,91 @@ h1 {
 
 .permission-status {
   color: #7d3434;
+}
+
+.queue {
+  margin-top: 20px;
+}
+
+.queue h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.queue-usage,
+.queue-empty,
+.data-loss-notice {
+  color: #5b5953;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.queue-usage {
+  margin: 0 0 10px;
+}
+
+.queue-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed #c9c2b5;
+  border-radius: 8px;
+}
+
+.queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-item {
+  padding: 12px;
+  border: 1px solid #ded9ce;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.queue-item h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.queue-item p {
+  margin: 6px 0 0;
+  color: #5b5953;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.queue-item .queue-item-state {
+  color: #7a4c13;
+  font-weight: 650;
+}
+
+.queue-item button {
+  margin-top: 10px;
+  padding: 7px 10px;
+  border: 1px solid #9f4545;
+  border-radius: 6px;
+  color: #7d3434;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.queue-item button:focus-visible {
+  outline: 3px solid #535a81;
+  outline-offset: 2px;
+}
+
+.queue-item button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.data-loss-notice {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #ded9ce;
 }
