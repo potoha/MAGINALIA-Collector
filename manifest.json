@@ -2,9 +2,12 @@
   "manifest_version": 3,
   "name": "MAGINALIA Collector",
   "version": "0.1.0",
-  "description": "選択テキストを本棚に追加する操作入口です。保存機能は未実装です。",
+  "description": "選択した引用と出典を確認するための拡張機能です。保存連携は未実装です。",
   "permissions": [
-    "contextMenus"
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "storage"
   ],
   "background": {
     "service_worker": "service-worker.js"
