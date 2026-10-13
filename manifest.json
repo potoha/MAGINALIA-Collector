@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "MAGINALIA Collector",
+  "version": "0.1.0",
+  "description": "選択テキストを本棚に追加する操作入口です。保存機能は未実装です。",
+  "permissions": [
+    "contextMenus"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "MAGINALIA Collector — 準備中",
+    "default_popup": "popup.html",
+    "default_icon": "icon..png"
+  },
+  "icons": {
+    "16": "icon..png",
+    "48": "icon..png",
+    "128": "icon..png"
+  }
+}
