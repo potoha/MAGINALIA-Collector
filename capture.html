@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>引用を確認 | MAGINALIA Collector</title>
+    <link rel="stylesheet" href="capture.css">
+    <script src="capture.js" defer></script>
+  </head>
+  <body>
+    <main class="panel" aria-labelledby="heading">
+      <header class="brand">
+        <img src="icon..png" alt="" width="38" height="36">
+        <span>MAGINALIA Collector</span>
+      </header>
+
+      <h1 id="heading">本棚に追加</h1>
+      <p id="save-status" class="status" role="status" aria-live="polite">
+        保存連携は未接続です。入力内容は保存・送信されず、この画面を閉じると失われます。
+      </p>
+
+      <section id="capture-entry" aria-label="引用内容の確認" hidden>
+        <div id="review-notices" class="notice" role="status" aria-live="polite" hidden>
+          <p>確認してください</p>
+          <ul id="review-notices-list"></ul>
+        </div>
+
+        <div class="capture-fields">
+          <fieldset>
+            <legend>出典情報</legend>
+            <div class="field">
+              <label for="page-title">ページタイトル</label>
+              <input id="page-title" name="pageTitle" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="site-name">サイト名</label>
+              <input id="site-name" name="siteName" type="text" autocomplete="off">
+            </div>
+            <div class="field field-wide">
+              <label for="page-url">閲覧中のページURL</label>
+              <input id="page-url" name="pageUrl" type="url" inputmode="url" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="author">著者（ページ記載）</label>
+              <input id="author" name="author" type="text" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="published-at">公開日（ページ記載）</label>
+              <input id="published-at" name="publishedAt" type="text" autocomplete="off">
+            </div>
+            <div id="frame-url-field" class="field field-wide" hidden>
+              <span class="field-label">選択したフレームのURL</span>
+              <p id="frame-url" class="read-only"></p>
+            </div>
+            <div id="canonical-field" class="field field-wide" hidden>
+              <span class="field-label">canonical URL候補</span>
+              <p id="canonical-url" class="read-only"></p>
+              <small>閲覧中のページURLとは別の候補です。自動では置き換えません。</small>
+            </div>
+            <div class="field field-wide">
+              <span class="field-label">取得日時</span>
+              <p id="acquired-at" class="read-only"></p>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>引用</legend>
+            <div class="field">
+              <label for="quote">引用本文</label>
+              <textarea id="quote" name="quote" rows="6" spellcheck="false"></textarea>
+              <small>選択した原文を確認・編集できます。</small>
+            </div>
+            <div class="field">
+              <label for="comment">コメント（任意）</label>
+              <textarea id="comment" name="comment" rows="4"></textarea>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>追加情報</legend>
+            <label class="checkbox">
+              <input id="save-html" name="saveHtml" type="checkbox" disabled>
+              <span>ページのHTMLも保存する</span>
+            </label>
+            <small>HTML保存機能は未実装です。この項目は選択できません。</small>
+          </fieldset>
+
+          <fieldset>
+            <legend>保存先</legend>
+            <p class="read-only">Private Shelf</p>
+            <small>MAGINALIAへの保存連携は未接続です。</small>
+          </fieldset>
+
+          <div class="actions">
+            <button id="cancel" class="button-secondary" type="button">キャンセル</button>
+            <button id="add-to-shelf" class="button-primary" type="button" disabled>
+              本棚に追加（未接続）
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="capture-error" class="error-panel" aria-labelledby="error-heading" hidden>
+        <h2 id="error-heading">引用を開けませんでした</h2>
+        <p id="error-message"></p>
+        <button id="error-close" class="button-secondary" type="button">閉じる</button>
+      </section>
+    </main>
+  </body>
+</html>
