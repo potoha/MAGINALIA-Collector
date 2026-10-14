@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>引用を確認 | MAGINALIA Collector</title>
     <link rel="stylesheet" href="capture.css">
+    <script src="outbox.js" defer></script>
     <script src="capture.js" defer></script>
   </head>
   <body>
@@ -14,9 +15,9 @@
         <span>MAGINALIA Collector</span>
       </header>
 
-      <h1 id="heading">本棚に追加</h1>
+      <h1 id="heading">引用を確認</h1>
       <p id="save-status" class="status" role="status" aria-live="polite">
-        保存連携は未接続です。入力内容は保存・送信されず、この画面を閉じると失われます。
+        引用はまだこのブラウザーに保留されていません。
       </p>
 
       <section id="capture-entry" aria-label="引用内容の確認" hidden>
@@ -86,15 +87,15 @@
           </fieldset>
 
           <fieldset>
-            <legend>保存先</legend>
-            <p class="read-only">Private Shelf</p>
-            <small>MAGINALIAへの保存連携は未接続です。</small>
+            <legend>現在の保管先</legend>
+            <p class="read-only">このブラウザー内の保留キュー</p>
+            <small>ブラウザー内の保留はPrivate Shelfへの保存完了を意味しません。Host連携は未実装のため、送信処理は行いません。</small>
           </fieldset>
 
           <div class="actions">
-            <button id="cancel" class="button-secondary" type="button">キャンセル</button>
-            <button id="add-to-shelf" class="button-primary" type="button" disabled>
-              本棚に追加（未接続）
+            <button id="cancel" class="button-secondary" type="button">保存せずに閉じる</button>
+            <button id="add-to-shelf" class="button-primary" type="button">
+              このブラウザーに保留
             </button>
           </div>
         </div>

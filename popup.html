@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>MAGINALIA Collector</title>
     <link rel="stylesheet" href="popup.css">
+    <script src="outbox.js" defer></script>
     <script src="popup.js" defer></script>
   </head>
   <body>
@@ -13,14 +14,25 @@
         <img src="icon..png" alt="" width="38" height="36">
         <span>MAGINALIA Collector</span>
       </div>
-      <h1 id="heading">準備中</h1>
+      <h1 id="heading">保留中の引用</h1>
       <p id="status" class="status" role="status" aria-live="polite">
-        引用の保存はまだ実装されていません。
+        このブラウザー内の保留データを読み込んでいます。
       </p>
       <p id="details" class="details">
-        この画面では選択した文章を表示・保存しません。
+        Private Shelfへの保存は未接続です。Hostへの送信は行いません。
       </p>
       <p id="permission-status" class="permission-status" role="status" aria-live="polite" hidden></p>
+
+      <section class="queue" aria-labelledby="queue-heading">
+        <h2 id="queue-heading">保留中</h2>
+        <p id="queue-usage" class="queue-usage" role="status" aria-live="polite"></p>
+        <p id="queue-empty" class="queue-empty" hidden>保留中の引用はありません。</p>
+        <div id="queue-list" class="queue-list"></div>
+      </section>
+
+      <p class="data-loss-notice">
+        ブラウザープロファイルや拡張機能のデータを削除すると、保留中の引用も失われる場合があります。
+      </p>
     </main>
   </body>
 </html>

@@ -8,6 +8,13 @@ const notices = document.getElementById("review-notices");
 const noticeList = document.getElementById("review-notices-list");
 const cancelButton = document.getElementById("cancel");
 const errorCloseButton = document.getElementById("error-close");
+const saveButton = document.getElementById("add-to-shelf");
+const outbox = globalThis.CollectorOutbox?.create();
+let activeRequestId = null;
+let sourcePayload = null;
+let isSaving = false;
+let isQueued = false;
+let closeApproved = false;
 
 const ERROR_COPY = {
   "selection-missing": "選択範囲を取得できませんでした。Webページで文章を選び直してください。",
@@ -49,6 +56,7 @@ function formatAcquisitionTime(value) {
 }
 
 function renderCapture(payload) {
+  sourcePayload = payload;
   entry.hidden = false;
   errorPanel.hidden = true;
   setValue("page-title", payload.title);
@@ -90,7 +98,91 @@ function renderCapture(payload) {
   }
 }
 
+function outboxErrorCopy(error) {
+  switch (error?.code) {
+    case "item-too-large":
+      return "この引用は上限の16 MiBを超えるため保留できません。内容を短くして再度お試しください。入力内容はこの画面に残っています。";
+    case "queue-full":
+      return "保留キューの上限128 MiBに達しているため保存できません。保留中の引用を確認してください。入力内容はこの画面に残っています。";
+    case "storage-quota":
+      return "ブラウザーの保存領域が不足しているため保留できませんでした。既存の保留データは保持されています。入力内容はこの画面に残っています。";
+    case "storage-unavailable":
+      return "ブラウザー内の保留領域を利用できません。入力内容はこの画面に残っています。";
+    case "storage-blocked":
+      return "保留領域を開けませんでした。ほかのCollector画面を閉じてから再度お試しください。入力内容はこの画面に残っています。";
+    case "invalid-request-id":
+      return "この引用の識別情報を確認できず、保留できませんでした。入力内容はこの画面に残っています。";
+    default:
+      return "ブラウザー内に保留できませんでした。保存領域を確認して再度お試しください。入力内容はこの画面に残っています。";
+  }
+}
+
+async function saveToBrowserQueue() {
+  if (isSaving || isQueued) {
+    return;
+  }
+  if (!outbox || !activeRequestId || !sourcePayload) {
+    saveStatus.textContent = "保留領域を利用できません。入力内容はこの画面に残っています。";
+    return;
+  }
+
+  const quote = document.getElementById("quote").value;
+  if (quote.trim().length === 0) {
+    saveStatus.textContent = "引用本文を入力してから保留してください。";
+    document.getElementById("quote").focus();
+    return;
+  }
+
+  const title = document.getElementById("page-title").value;
+  const pageUrl = document.getElementById("page-url").value;
+  const payload = {
+    originalQuote: typeof sourcePayload.quote === "string" ? sourcePayload.quote : "",
+    quote,
+    title,
+    siteName: document.getElementById("site-name").value,
+    pageUrl,
+    author: document.getElementById("author").value,
+    publishedAt: document.getElementById("published-at").value,
+    canonicalUrl: typeof sourcePayload.canonicalUrl === "string" ? sourcePayload.canonicalUrl : "",
+    frameUrl: typeof sourcePayload.frameUrl === "string" ? sourcePayload.frameUrl : "",
+    isFrameSelection: sourcePayload.isFrameSelection === true,
+    selectionMatches: typeof sourcePayload.selectionMatches === "boolean" ? sourcePayload.selectionMatches : null,
+    metadataStatus: typeof sourcePayload.metadataStatus === "string" ? sourcePayload.metadataStatus : "unavailable",
+    acquiredAt: typeof sourcePayload.acquiredAt === "string" ? sourcePayload.acquiredAt : "",
+    comment: document.getElementById("comment").value
+  };
+
+  isSaving = true;
+  saveButton.disabled = true;
+  cancelButton.disabled = true;
+  saveStatus.textContent = "このブラウザー内に保留しています。画面を閉じずにお待ちください。";
+  try {
+    const result = await outbox.addPending({
+      requestId: activeRequestId,
+      payload,
+      title,
+      pageUrl
+    });
+    isQueued = true;
+    entry.querySelectorAll("fieldset").forEach((fieldset) => {
+      fieldset.disabled = true;
+    });
+    saveButton.textContent = result.alreadyQueued ? "保留済み" : "ブラウザー内に保留済み";
+    cancelButton.textContent = "閉じる";
+    saveStatus.textContent = result.alreadyQueued
+      ? "この引用はすでにブラウザー内に保留されています。Private Shelfにはまだ保存されていません。Host未接続のため送信処理は行っていません。"
+      : "ブラウザー内に保留しました。Private Shelfにはまだ保存されていません。Host未接続のため送信処理は行っていません。";
+  } catch (error) {
+    saveStatus.textContent = outboxErrorCopy(error);
+    saveButton.disabled = false;
+  } finally {
+    isSaving = false;
+    cancelButton.disabled = false;
+  }
+}
+
 async function closeCapturePage(button) {
+  closeApproved = true;
   button.disabled = true;
   try {
     await chrome.runtime.sendMessage({ type: "collector:close-capture" });
@@ -99,6 +191,13 @@ async function closeCapturePage(button) {
   }
   window.close();
 }
+
+window.addEventListener("beforeunload", (event) => {
+  if (sourcePayload && !isQueued && !closeApproved) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
 
 const params = new URLSearchParams(window.location.search);
 const requestId = params.get("requestId");
@@ -109,6 +208,7 @@ if (errorReason) {
 } else if (!requestId) {
   showError("selection-missing");
 } else {
+  activeRequestId = requestId;
   chrome.runtime.sendMessage(
     { type: "collector:consume-capture", requestId },
     (response) => {
@@ -122,7 +222,13 @@ if (errorReason) {
 }
 
 cancelButton.addEventListener("click", () => {
+  if (!isQueued && !window.confirm("この画面でまだ保留していない引用と編集内容を破棄して閉じます。よろしいですか？")) {
+    return;
+  }
   void closeCapturePage(cancelButton);
+});
+saveButton.addEventListener("click", () => {
+  void saveToBrowserQueue();
 });
 errorCloseButton.addEventListener("click", () => {
   void closeCapturePage(errorCloseButton);
