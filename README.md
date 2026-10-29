@@ -4,8 +4,8 @@
 
 MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome / Chromium 系ブラウザ向け Manifest V3 拡張機能**です。文系の学生・研究者・書き手が、出典を失わずに資料を保存することを目指しています。
 
-> **開発状況: 選択引用の確認画面とブラウザー内の保留キューを実装済みです（α・開発用）。**
-> 実 Chrome での unpacked 導入と操作確認は未完了です。Private Shelf への正式保存、Host送信、画像キャプチャー画面、HTML 保存、OCR、MAGINALIA との接続は未実装です。このリポジトリは配布リリースではありません。
+> **開発状況: 選択引用の確認画面とブラウザー内の保留キューに加え、MAGINALIA連携プログラムへの接続確認（開発用・暫定）を実装しています（α・開発用）。**
+> Private Shelf への正式保存、Hostへの引用送信、画像キャプチャー画面、HTML 保存、OCR は未実装です。接続確認は保存ではないため、成功しても引用は保存されません。製品版の拡張機能としては実 Chrome での導入・操作確認が未完了で、接続確認が対象とする連携プログラムの仕様・登録方法・拡張機能IDも未承認です。このリポジトリは配布リリースではありません。
 
 ## 現在の基盤
 
@@ -14,6 +14,7 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 - 選択本文は確認画面を開く間だけ `chrome.storage.session` で受け渡し、利用者が「このブラウザーに保留」を選ぶと、編集後の引用・出典・コメントを拡張機能専用のIndexedDBに保存します。本文はURL、ログ、同期ストレージ、外部サービスへ送りません。
 - 保留項目は1件16 MiB、合計128 MiBまでです。上限は本文などのUTF-8文字列、Blob等から計算する論理サイズで、IndexedDB内部の保存オーバーヘッドを含むディスク使用量ではありません。ブラウザーの実際の保存容量が不足する場合は保存失敗を表示し、確認画面の入力は残します。項目は自動削除・自動期限切れにせず、ツールバー画面から利用者が確認ダイアログを経て個別に削除します。
 - 保留成功はPrivate Shelfへの保存完了ではありません。Host未接続のため送信・再送は行いません。画像キャプチャー、Shelf writer、Reviewer取込、OCR、ローカルホスト、Installer、HTML保存、クラウド連携はありません。キューAPIは画像Blobも保管できますが、画像を作成する画面は未実装です。
+- ツールバー画面の「MAGINALIAとの接続」から、このパソコンのMAGINALIA連携プログラムに問い合わせ、その稼働状態と、MAGINALIAが設定した単一Private Shelfの表示名・識別IDを確認できます。**確認だけを行い、引用の送信・保存は行いません。** 未設定、未登録、接続拒否、応答なし、Shelf未設定、Shelf不一致はそれぞれ別の案内になります。連携プログラムの仕様・登録方法・拡張機能IDは未承認のため、製品版の`manifest.json`には`nativeMessaging`権限も接続先名も含めていません。詳細は[docs/issue-4-native-host-client.md](docs/issue-4-native-host-client.md)を参照してください。
 - 保留前の確認画面を閉じる操作では、未保留の引用・編集内容を破棄する確認を表示します。ブラウザー離脱時にも標準の離脱確認を要求します。保留する前の引用はセッション内の一時データなので、ブラウザーや拡張機能の異常終了時には失われる場合があります。
 - IndexedDBはChromeの拡張機能データとして現在のブラウザープロファイル内に保存され、同期されません。拡張機能の削除、プロファイルの削除、ブラウザーのサイトデータ消去で保留内容を失う場合があります。現状、キューのエクスポート/バックアップ機能はありません。
 - 宣言権限は `contextMenus`、`activeTab`、`scripting`、`storage` です。全サイトのホスト権限や `tabs` 権限は要求しません。ページ属性取得は、利用者がコンテキストメニューを実行したタブに限ります。
@@ -73,7 +74,7 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 1. Chrome で `chrome://extensions` を開きます。
 2. `デベロッパー モード` を ON にします。
 3. `パッケージ化されていない拡張機能を読み込む` を選び、このリポジトリのルートフォルダを指定します。
-4. MAGINALIA Collector が一覧に追加されたら、ツールバーアイコンをクリックします。ブラウザー内の保留件数が表示され、Private Shelf未保存・Host未接続で送信していないことを確認します。
+4. MAGINALIA Collector が一覧に追加されたら、ツールバーアイコンをクリックします。ブラウザー内の保留件数が表示され、Private Shelf未保存・Host未接続で送信していないことを確認します。「MAGINALIAとの接続」の「接続を確認」は、実験的なMAGINALIA連携プログラムを別途用意しない限り、未登録または未設定の案内になります。これは正常な状態です。接続を確認できた場合も、引用の送信・保存はまだ行われません。
 5. 通常の HTTP(S) ページで文字列を選択して右クリックし、`本棚に追加` を選びます。確認画面に引用本文とページ情報が表示され、引用本文を編集できることを確認します。canonical URL は閲覧中の URL と別の候補として表示されます。
 6. 確認画面で本文・出典・コメントを編集し、「このブラウザーに保留」を選びます。成功表示がPrivate Shelfへの正式保存を意味しないことを確認します。
 7. ツールバー画面で保留項目が表示され、状態が「Private Shelf未保存」と区別されることを確認します。削除を一度キャンセルし、項目が残ることを確認した後、確認してから個別削除します。
@@ -88,11 +89,12 @@ node --check service-worker.js
 node --check popup.js
 node --check capture.js
 node --check outbox.js
+node --check host-client.js
 node -e "JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))"
-node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs
+node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs tests/host-client.test.cjs tests/service-worker-host.test.cjs
 ```
 
-単体テストは Chrome API をモックした登録・クリック分岐の確認です。実 Chrome の拡張機能読み込みや右クリック動作の証拠とは別に扱います。
+単体テストは Chrome API をモックした登録・クリック分岐の確認です。実 Chrome の拡張機能読み込みや右クリック動作の証拠とは別に扱います。接続確認の隔離された実Chrome検証は [docs/issue-4-native-host-client.md](docs/issue-4-native-host-client.md) と [dev/native-host-smoke](dev/native-host-smoke) にあります。これは実験的な連携プログラムに対する開発用の検証で、製品版の導入・Shelf保存の証拠ではありません。
 
 宣言権限 `contextMenus` は選択時の右クリック項目に、`activeTab` と `scripting` は明示操作後のページ属性取得に、`storage` は短時間の画面受け渡しに使います。IndexedDBは拡張機能のオリジン内で使用し、追加のChrome権限は要求しません。項目は HTTP(S) ページ上の選択時だけ表示されます。権限が利用できない場合はページ属性を確認できなかったことを画面に表示し、Shelfへの保存成功を示しません。
 
@@ -110,12 +112,12 @@ node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-ou
 ## MAGINALIAとの関係
 
 ```text
-Webページ ── 選択テキスト ──► Collector IndexedDB ──[Host未実装]──► Private Shelf
-       └── 画面キャプチャー ─► Collector IndexedDB ──[Host未実装]──► Reviewer (OCR/人手確認)
+Webページ ── 選択テキスト ──► Collector IndexedDB ──[接続確認のみ・送信は未実装]──► Private Shelf
+       └── 画面キャプチャー ─► Collector IndexedDB ──[未実装]──► Reviewer (OCR/人手確認)
                                                                         └──► Private Shelf
 ```
 
-Collector は**収集インターフェース**で、ShelfやReviewerのデータ正本を独自に持ちません。ブラウザからローカルファイルへ無制限に直接書き込まず、MAGINALIA側が提供する限定的な接続アダプターを通します。具体的な接続方式（Native Messagingなど）は**未確定**です。ローカル保存とGitHub同期・Publishは別の操作で、収集行為による自動公開は行いません。
+Collector は**収集インターフェース**で、ShelfやReviewerのデータ正本を独自に持ちません。ブラウザからローカルファイルへ無制限に直接書き込まず、MAGINALIA側が提供する限定的な接続アダプターを通します。接続方式は [ADR 0019 / D070](https://github.com/potoha/MAGINALIA_IDE/blob/main/docs/decisions/0019-collector-native-messaging-host.md) でNative Messagingの方針のみがAcceptedで、登録方法、拡張機能ID、Shelf identity binding、cross-process write safety、冪等性、Reviewerのオフラインqueueは未決定です。現在の接続確認は**開発用の実験的な連携プログラム**を対象にしており、本番契約ではありません。ローカル保存とGitHub同期・Publishは別の操作で、収集行為による自動公開は行いません。
 
 実装時は現行の **Shelf JSON v0.4** と **`.magicap` v3** を尊重します。Webページは `source.kind = "website"` として扱い、正式な引用には出典・取得日時を付与します。HTMLスナップショットや四角形座標の契約は、既存スキーマへ無断でフィールドを追加せず、正式な仕様決定を経て導入します。
 

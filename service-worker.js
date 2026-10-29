@@ -1,3 +1,13 @@
+// Native Messaging is only reachable from the extension service worker or an
+// extension page, so the helper bridge lives here rather than in page scripts.
+if (typeof importScripts === "function") {
+  try {
+    importScripts("host-client.js");
+  } catch {
+    console.warn("Collector helper client is unavailable.");
+  }
+}
+
 const ADD_SELECTION_MENU_ID = "maginalia-collector-add-selection";
 const CAPTURE_STORAGE_PREFIX = "collector.capture-transfer.";
 const CAPTURE_TTL_MS = 5 * 60 * 1000;
@@ -308,7 +318,66 @@ async function consumeCapture(requestId) {
   }
 }
 
+function isExtensionPageSender(sender) {
+  if (typeof sender?.url !== "string") {
+    return false;
+  }
+  if (typeof chrome.runtime.id === "string" && sender.id !== chrome.runtime.id) {
+    return false;
+  }
+
+  try {
+    const senderUrl = new URL(sender.url);
+    const extensionUrl = new URL(chrome.runtime.getURL(""));
+    return senderUrl.protocol === "chrome-extension:" && senderUrl.origin === extensionUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
+function unavailableHostReport(code) {
+  return {
+    status: "unavailable",
+    experimental: true,
+    code,
+    host: null,
+    shelf: null,
+    checks: []
+  };
+}
+
+// Reads the helper profile and asks the experimental helper for its health and
+// configured Shelf. Nothing is written and nothing is sent from the outbox, so a
+// success here must not be presented as a Shelf save.
+async function checkHostConnection() {
+  const api = globalThis.CollectorHostClient;
+  if (!api?.createHostClient) {
+    return { ok: true, report: unavailableHostReport("native-messaging-unavailable") };
+  }
+
+  const profile = await api.loadHostProfile(chrome.storage?.local);
+  const client = api.createHostClient({
+    hostName: profile?.hostName ?? "",
+    sendNativeMessage: (name, message, callback) => {
+      chrome.runtime.sendNativeMessage(name, message, callback);
+    },
+    getLastError: () => chrome.runtime.lastError
+  });
+
+  return { ok: true, report: await client.checkCompatibility() };
+}
+
 function handleExtensionMessage(message, sender, sendResponse) {
+  if (message?.type === "collector:host-check") {
+    if (!isExtensionPageSender(sender)) {
+      return false;
+    }
+    void checkHostConnection()
+      .then((response) => sendResponse(response))
+      .catch(() => sendResponse({ ok: false, code: "host-check-failed" }));
+    return true;
+  }
+
   if (message?.type === "collector:consume-capture") {
     if (!isCaptureRequestSender(sender, message.requestId)) {
       return false;
