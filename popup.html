@@ -30,6 +30,36 @@
         <div id="queue-list" class="queue-list"></div>
       </section>
 
+      <section class="host-check" aria-labelledby="host-check-heading">
+        <h2 id="host-check-heading">MAGINALIAとの接続</h2>
+        <p id="host-check-lead" class="host-check-lead">
+          この接続確認は開発用の暫定版です。このパソコンのMAGINALIA連携プログラムとつながるか、指定されたPrivate Shelfを確認します。確認だけを行い、引用の送信や保存はまだ行いません。
+        </p>
+        <button id="host-check-button" class="host-check-button" type="button">
+          接続を確認
+        </button>
+        <div id="host-check-result" class="host-check-result" role="status" aria-live="polite">
+          <p id="host-check-status" class="host-check-summary">まだ確認していません。</p>
+          <div id="host-check-shelf" class="host-check-shelf" hidden>
+            <dl>
+              <div class="host-check-row">
+                <dt>保存先</dt>
+                <dd id="host-check-shelf-name"></dd>
+              </div>
+              <div class="host-check-row">
+                <dt>識別ID</dt>
+                <dd id="host-check-shelf-id" class="host-check-shelf-id"></dd>
+              </div>
+            </dl>
+            <small>識別IDは保存先を見分けるための文字列です。この画面からは変更できません。</small>
+          </div>
+          <div id="host-check-failures" class="host-check-failures" hidden>
+            <p class="host-check-failures-label">確認できなかった項目</p>
+            <ul id="host-check-failure-list"></ul>
+          </div>
+        </div>
+      </section>
+
       <p class="data-loss-notice">
         ブラウザープロファイルや拡張機能のデータを削除すると、保留中の引用も失われる場合があります。
       </p>
