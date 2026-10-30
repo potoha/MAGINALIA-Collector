@@ -87,6 +87,20 @@ Cleanup of this run: the test registry key `HKCU\Software\Google\Chrome\NativeMe
 
 **Pre-existing, not touched:** `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.maginalia.issue3.smoke` (a leftover from the Issue #3 smoke, whose cleanup was already reported incomplete) is still present. It was not created by this work and ownership could not be proven, so it was left as found.
 
+## Review follow-up: smoke tooling safety
+
+The disposable harness in `dev/native-host-smoke/` was hardened so it fails closed. This changed development tooling only: `host-client.js`, the service worker, the popup, the Outbox and the experimental host itself are unchanged.
+
+| Item | Result | Evidence |
+| --- | --- | --- |
+| `setup.mjs` never reuses an existing `--root` | PASS | Root is created with a non-recursive `mkdir`; an existing path, a missing parent directory or a path inside the repository aborts before any write |
+| Unique ownership marker bound to host name, extension ID and root | PASS | Random 32-hex marker in `smoke-owner.json`, mirrored into `native-host.json` `description`; the extension ID is re-derived from the copied manifest `key` at cleanup time |
+| `cleanup.mjs` verifies ownership, registration target and path before deleting | PASS | `collectOwnershipProblems` runs before any deletion; the registry key is re-read after removal; the tree is deleted bottom-up with a per-entry re-check |
+| Refusal paths fail closed | PASS | `node --test tests/*.cjs` — 69 tests, 0 failures; the new `tests/native-host-smoke.test.cjs` covers an existing directory, an already-registered host, a forged manifest, a cross-root registration, a copied tree, a junction and a missing ownership record |
+| No change to the production Host path or the Outbox | PASS | `git diff --stat` for this follow-up limited to `dev/native-host-smoke/`, `tests/native-host-smoke.test.cjs` and this note |
+| Issue #3 leftover registration untouched | PASS | `com.maginalia.issue3.smoke` was only ever queried, never modified or deleted |
+| Full real-Chrome re-run of the smoke after the harness change | NOT VERIFIED | This follow-up changes only the disposable harness; the transport, the helper and the extension code under test are byte-identical to the run recorded above |
+
 **Boundary:** passing Chrome and mock checks do not establish a production Collector, Shelf writes, cross-process safety, or Reviewer delivery. ADR 0019's implementation acceptance items remain NOT VERIFIED.
 
 ## Running the isolated smoke
@@ -97,7 +111,7 @@ Cleanup of this run: the test registry key `HKCU\Software\Google\Chrome\NativeMe
 node dev/native-host-smoke/setup.mjs --root <temp-dir> --desktop-host <abs path to built experimental host .js>
 ```
 
-`setup.mjs` writes a disposable Collector build (with `nativeMessaging` and a throwaway manifest `key`), a Shelf fixture, a `shelf_location.yml` in the current Desktop registry format, a descriptor, a launcher and a test-only Chrome host manifest. It refuses to run if the chosen host name is already registered, and it never writes inside the repository.
+`setup.mjs` writes a disposable Collector build (with `nativeMessaging` and a throwaway manifest `key`), a Shelf fixture, a `shelf_location.yml` in the current Desktop registry format, a descriptor, a launcher, a test-only Chrome host manifest and a `smoke-owner.json` ownership record. It creates `--root` with a non-recursive `mkdir`, so it never reuses or overwrites an existing directory, and it refuses to run if the chosen host name is already registered. It never writes inside the repository.
 
 After the checks, remove only what was created:
 
@@ -105,7 +119,10 @@ After the checks, remove only what was created:
 node dev/native-host-smoke/cleanup.mjs --root <temp-dir> --host <host name>
 ```
 
-`cleanup.mjs` deletes the registry key only when its value points at that root's manifest, and deletes the directory only when it contains the disposable `nativeMessaging` build.
+`cleanup.mjs` fails closed. Before deleting anything it requires that the ownership record, the host name, the absolute root path, the ownership marker embedded in `native-host.json` `description`, the extension ID re-derived from `extension/manifest.json` `key`, the single `allowed_origins` entry and the current registry value all agree. A missing, forged, moved, or re-registered environment stops the run with a
+`cleanup:` message and leaves the registration and the directory in place. It also refuses any tree containing a symbolic link or junction, and deletes entries bottom-up while re-checking each one.
+
+`tests/native-host-smoke.test.cjs` covers the refusal paths with an in-memory registry adapter: an existing `--root`, an already-registered host name, a forged host manifest, a registration that points at another root, a copied tree, a junction inside the root, and a missing ownership record.
 
 Chrome 156 ignores `--load-extension` for unpacked extensions. Loading the disposable build therefore requires either the `chrome://extensions` developer-mode UI or the CDP `Extensions.loadUnpacked` command with `--enable-unsafe-extension-debugging`. Both keep the extension inside the disposable profile.
 

@@ -2,83 +2,51 @@
 /**
  * Development-only cleanup for the Native Messaging smoke.
  *
- * Removes only the registration and directory created by setup.mjs. It refuses
- * to delete a registry key or directory it cannot prove it owns.
+ * Removes only the registration and directory created by setup.mjs, and only
+ * after proving ownership: the `smoke-owner.json` marker, the host name, the
+ * root path, the extension ID derived from the copied manifest `key`, the
+ * manifest `allowed_origins`, and the current registry value must all agree.
+ * Anything unproven, unknown, moved, forged, or linked (symbolic link or
+ * junction anywhere in the tree) stops the run before a single deletion.
+ *
+ * All verification lives in ./lib.mjs. This CLI only parses arguments, supplies
+ * the real Windows registry adapter and reports what happened.
  */
-import { execFileSync } from "node:child_process";
-import { readFile, rm, stat } from "node:fs/promises";
 import * as path from "node:path";
 
-function fail(message) {
-  process.stderr.write(`cleanup: ${message}\n`);
-  process.exit(1);
-}
+import { createWindowsRegistry, registryKeyFor, removeSmokeEnvironment, SmokeError } from "./lib.mjs";
 
 function parseArguments(argv) {
   const options = { root: "", hostName: "" };
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     const value = argv[index + 1];
-    if (!value) fail(`missing value for ${flag}`);
+    if (!value) throw new SmokeError(`missing value for ${flag}`);
     if (flag === "--root") options.root = path.resolve(value);
     else if (flag === "--host") options.hostName = value;
-    else fail(`unknown option ${flag}`);
+    else throw new SmokeError(`unknown option ${flag}`);
     index += 1;
   }
-  if (!options.root) fail("--root is required");
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(options.hostName)) fail("--host is required");
+  if (!options.root) throw new SmokeError("--root is required");
+  if (!options.hostName) throw new SmokeError("--host is required");
   return options;
 }
 
-function registryValue(key) {
-  try {
-    const output = execFileSync("reg", ["query", key, "/ve"], { encoding: "utf8" });
-    const match = /REG_SZ\s+(.+)$/mu.exec(output);
-    return match?.[1]?.trim() ?? "";
-  } catch {
-    return null;
-  }
-}
-
-function registryExists(key) {
-  try {
-    execFileSync("reg", ["query", key], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const options = parseArguments(process.argv.slice(2));
-const key = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${options.hostName}`;
-const manifestPath = path.join(options.root, "native-host.json");
-
-const current = registryValue(key);
-if (current === null) {
-  process.stdout.write(`registry: ${key} is not registered\n`);
-} else if (path.resolve(current) !== path.resolve(manifestPath)) {
-  fail(`${key} points to ${current}, which is not this smoke root; refusing to remove it`);
-} else {
-  execFileSync("reg", ["delete", key, "/f"], { stdio: "ignore" });
-  if (registryExists(key)) fail(`${key} is still registered after deletion`);
-  process.stdout.write(`registry: removed ${key}\n`);
-}
-
 try {
-  await stat(manifestPath);
-} catch {
-  // The directory is already gone or was never created by setup.mjs.
-}
+  const options = parseArguments(process.argv.slice(2));
+  const result = await removeSmokeEnvironment({
+    root: options.root,
+    hostName: options.hostName,
+    registry: createWindowsRegistry()
+  });
 
-const marker = path.join(options.root, "extension", "manifest.json");
-try {
-  const manifest = JSON.parse(await readFile(marker, "utf8"));
-  if (!Array.isArray(manifest.permissions) || !manifest.permissions.includes("nativeMessaging")) {
-    fail(`${options.root} does not look like a smoke environment; refusing to delete it`);
+  if (result.removedRegistry) {
+    process.stdout.write(`registry: removed ${result.registryKey}\n`);
+  } else {
+    process.stdout.write(`registry: ${registryKeyFor(options.hostName)} was not registered\n`);
   }
-} catch {
-  fail(`${options.root} has no readable smoke manifest; refusing to delete it`);
+  process.stdout.write(`directory: removed ${result.root}\n`);
+} catch (error) {
+  process.stderr.write(`cleanup: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = 1;
 }
-
-await rm(options.root, { recursive: true, force: true });
-process.stdout.write(`directory: removed ${options.root}\n`);

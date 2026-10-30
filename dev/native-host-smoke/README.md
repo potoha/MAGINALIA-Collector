@@ -18,12 +18,27 @@ registration. Use a disposable directory under your temporary folder.
 | `shelf/` | A Shelf fixture: typed `shelf.magi` marker, `library.json`, `books/`, `annotations/` |
 | `shelf_location.yml` | Desktop `shelf_location.yml` shape pointing the Private Shelf at `shelf/` |
 | `descriptor.json` | The experimental host descriptor (`experimental`, `shelfLocationPath`, `expectedShelfId`, `allowedOrigin`) |
-| `native-host.json` | Test-only Chrome host manifest with `allowed_origins` for exactly that extension ID |
+| `native-host.json` | Test-only Chrome host manifest with `allowed_origins` for exactly that extension ID and the run's ownership marker in `description` |
+| `smoke-owner.json` | Ownership record: marker, host name, extension ID, absolute root, creation time |
 | `launcher.cmd` | Launches the experimental host with the absolute Node executable |
 | `profile/` | An empty disposable Chrome profile |
 
 The repository, the user's Chrome profile, and any existing registration are not
-modified. `setup.mjs` refuses to run if the chosen host name is already registered.
+modified. `setup.mjs` creates `--root` with a non-recursive `mkdir`, so an existing
+directory is never reused or written into, and it refuses to run if the chosen
+host name is already registered.
+
+## Ownership marker
+
+Every run generates a random 32-hex marker. It is stored in `smoke-owner.json` and
+embedded in the `native-host.json` `description` as `[smoke-marker:<marker>]`. The
+owner record also binds the host name, the throwaway extension ID (re-derived at
+cleanup time from the copied manifest `key`) and the absolute root path.
+
+The experimental host descriptor takes exactly four keys, so the marker cannot
+live there. Binding runs through the host manifest instead: `allowed_origins[0]`
+must equal `chrome-extension://<extensionId>/`, and `<extensionId>` must equal the
+one in the owner record and the one derived from `extension/manifest.json` `key`.
 
 ## Usage
 
@@ -33,8 +48,10 @@ node dev/native-host-smoke/setup.mjs \
   --desktop-host "<absolute path to the built experimental collector host .js>"
 ```
 
-It prints a JSON description including the extension ID, host name, registry key
-and the paths it created. Register the printed key for the current user only:
+It prints a JSON description including the extension ID, host name, ownership
+marker, registry key and the paths it created. `--root` must be a path that does
+not exist yet; setup creates it and refuses to reuse anything. Register the
+printed key for the current user only:
 
 ```text
 reg add "HKCU\Software\Google\Chrome\NativeMessagingHosts\<host name>" /ve /t REG_SZ /d "<root>\native-host.json" /f
@@ -87,10 +104,34 @@ created or modified: this slice never writes.
 node dev/native-host-smoke/cleanup.mjs --root "<root>" --host "<host name>"
 ```
 
-`cleanup.mjs` removes the registry key only when its value points at that root's
-manifest, and deletes the directory only when it contains the disposable
-`nativeMessaging` build. Close every Chrome process using the disposable profile
-first. If any ownership check fails, it stops instead of deleting something else.
+Close every Chrome process using the disposable profile first.
+
+`cleanup.mjs` checks all of the following before it deletes anything:
+
+| Check | Refuses when |
+| --- | --- |
+| `--root` | does not exist, is not a directory, or is itself a symbolic link/junction |
+| `smoke-owner.json` | is missing, unparseable, not a smoke record, or malformed |
+| Host name | the record, `native-host.json` `name` and `--host` are not all the same |
+| Root path | the record's absolute root differs from `--root` (moved or copied tree) |
+| Ownership marker | `native-host.json` `description` carries no marker or a different one |
+| Extension identity | `extension/manifest.json` `key` does not derive the recorded extension ID, or the manifest lacks `nativeMessaging` |
+| Allowed origin | `allowed_origins` is not exactly `chrome-extension://<extensionId>/` |
+| Registration | the key holds a value other than `<root>\native-host.json` |
+| Tree contents | any symbolic link or junction exists anywhere below `--root` |
+
+It then deletes the registry key (only if it was present and matched), re-reads
+the key to prove it is gone, deletes the tree bottom-up while re-checking each
+entry, and confirms `--root` no longer exists. Any failed check stops the run
+with a `cleanup:` message and deletes nothing — not the registration, not the
+directory, not a link target. An unproven directory is left for a human to
+inspect; `cleanup.mjs` never guesses.
+
+Ownership that cannot be proven is not recoverable by this tool. A root whose
+`smoke-owner.json` is gone, corrupted, or belongs to another host must be removed
+manually after inspecting it. The same applies to a root left behind by a
+`setup.mjs` that failed partway: no ownership record was written, so cleanup
+refuses it by design and names the directory in the setup error.
 
 ## Limits
 
