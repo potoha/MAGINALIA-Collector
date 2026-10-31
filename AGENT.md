@@ -21,7 +21,7 @@ CollectorはChrome / Chromium系のManifest V3拡張機能としてWeb引用を*
 
 1. 今回のユーザー／Product Ownerによる**最新の明示決定**。
 2. **MAGINALIA IDEのAccepted ADR・canonical contract・Decision Log**。
-3. [Collector要件定義（現行版）](https://github.com/potoha/MAGINALIA_IDE/blob/main/plan/30_MAGINALIA_COLLECTOR_REQUIREMENTS.md)などの現行approved plan（当該v0.2の未決定事項は未決定のまま扱う）。
+3. [Collector要件定義（現行版）](https://github.com/potoha/MAGINALIA_IDE/blob/main/plan/30_MAGINALIA_COLLECTOR_REQUIREMENTS.md)などの現行approved plan（未決定の項目は、Accepted仕様または明示承認があるまで未決定のまま扱う）。
 4. このCollectorリポジトリの指定ブランチ上の実装、テスト、README、およびIssue/PRのレビュー。
 5. 古い設計や議論（参考のみ）。
 
