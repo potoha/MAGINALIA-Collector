@@ -1,6 +1,6 @@
 # MAGINALIA Collector — 開発エージェント運用規則
 
-**対象:** `potoha/MAGINALIA-Collector` の調査・設計・実装・検証・ドキュメント変更を担当するAIエージェント／人間の開発者。
+**対象:** `potoha/MAGINALIA-Collector` の調査・設計・実装・検証・ドキュメント変更を担当するAIエージェント／人間の開発者。モデル役割の既定割当は[AGENTS.md](AGENTS.md)を参照。
 
 **状態:** 初期開発規約。これを読むことは実装、マージ、リリースの自動許可を意味しない。
 
@@ -10,7 +10,7 @@ CollectorはChrome / Chromium系のManifest V3拡張機能としてWeb引用を*
 
 - **選択テキスト:** 右クリック「本棚に追加」→プロパティ・コメント・任意のHTML保存を確認→MAGINALIA **Private Shelf**へ。
 - **画像化された文字:** 拡張機能アイコン→可視領域の四角形選択（四隅を個別に調整）→**ReviewerのOCR待ち**へ。承認済みの引用としてShelfへ直送しない。
-- **初期設定／詳細設定:** MAGINALIAの接続、登録済みレジストリ取得、既定Shelf選択、Reviewer接続、未送信キュー等を扱うHTML画面。
+- **初期設定／詳細設定:** MAGINALIAの接続、設定済み単一Private Shelfの接続状態確認、Reviewer接続、未送信キュー等を扱うHTML画面。
 - **配布:** 当面GitHub Releasesと丁寧な手動導入手順。α2でデスクトップInstallerから導入支援。βでWeb Store公開を検討するのみ。
 
 **責務分担:** Collectorはブラウザー側の取得・入力・一時保留を担当する。永続的なShelf正本、ReviewerによるOCR/人手承認、Git/GitHub同期、公開の判断はMAGINALIA側。Collector自身に二つ目の研究データ正本や無制限のローカルファイル書き込みを持たせない。
@@ -21,7 +21,7 @@ CollectorはChrome / Chromium系のManifest V3拡張機能としてWeb引用を*
 
 1. 今回のユーザー／Product Ownerによる**最新の明示決定**。
 2. **MAGINALIA IDEのAccepted ADR・canonical contract・Decision Log**。
-3. [Collector要件定義v0.2](https://github.com/potoha/MAGINALIA_IDE/blob/main/plan/30_MAGINALIA_COLLECTOR_REQUIREMENTS.md)などの現行approved plan（当該v0.2の未決定事項は未決定のまま扱う）。
+3. [Collector要件定義（現行版）](https://github.com/potoha/MAGINALIA_IDE/blob/main/plan/30_MAGINALIA_COLLECTOR_REQUIREMENTS.md)などの現行approved plan（未決定の項目は、Accepted仕様または明示承認があるまで未決定のまま扱う）。
 4. このCollectorリポジトリの指定ブランチ上の実装、テスト、README、およびIssue/PRのレビュー。
 5. 古い設計や議論（参考のみ）。
 
@@ -54,7 +54,7 @@ CollectorはChrome / Chromium系のManifest V3拡張機能としてWeb引用を*
 - Manifest V3の**最小権限**から開始。選択操作やアイコンクリックに関連する`contextMenus`、`activeTab`、必要に応じた`scripting`／`storage`／`tabs.captureVisibleTab`等を検討し、全サイトの常時アクセス権を当然視しない。
 - 収集は明示的なユーザー操作から開始する。パスワード・フォーム入力・認証情報・機密ページ内容を自動収集しない。
 - HTMLの保存は任意。保存スナップショット内のスクリプト、認証情報、フォーム状態、外部リソース、容量制限、表示時のサニタイズを未解決のまま「安全」と宣言しない。
-- 接続方式（Native Messaging / 認証済みloopback API）は未決定。送信元extension ID、origin、権限、接続先認証、スキーマバージョン照合を設計・検証する。拡張機能に無制限なPCファイル書き込み能力を与えない。
+- 接続境界はADR 0019 / D070によりChrome Native MessagingがAccepted。実Host登録、extension ID、origin、権限、versioned protocol、Shelf identity binding、書込・再送・耐久receiptは個別に設計・検証する。通常のWeb引用保存にDesktop UIの起動を要求しない。Hostが設定済み単一Private Shelf以外へ任意書込できる設計は禁止。拡張機能に無制限なPCファイル書き込み能力を与えない。
 - データ、閲覧履歴、GitHub資格情報を不要なログ・テレメトリー・外部サーバへ送らない。秘密情報や私的引用をIssue、PR、テストfixture、スクリーンショット、公開配布物に含めない。
 - DRM解除、技術的保護の回避、ページ全体の無断クロールは対象外。権限拒否や保護ページは安全に失敗する。
 
@@ -64,8 +64,8 @@ CollectorはChrome / Chromium系のManifest V3拡張機能としてWeb引用を*
 
 - 通常の引用保存は「選択→本棚に追加→内容確認→保存」。
 - 画面キャプチャーは「アイコン→範囲選択→確認→OCR待ちに追加」。
-- 初期設定ではMAGINALIAから使える保存先を取得する。Project/Workdeskへの直送は正式な書き込み契約ができるまで有効化しない。
-- 接続未設定、MAGINALIA未起動、Reviewer不達、拡張機能未導入、保存失敗はそれぞれ区別して案内する。
+- 初期設定ではMAGINALIAが明示設定した単一Private Shelfの接続状態のみ取得する。Hostから複数Shelfを列挙・切替せず、Project/Workdeskへの直送は正式な書き込み契約ができるまで有効化しない。
+- Host未登録・起動失敗、Shelf未設定・identity不一致、Reviewer不達、拡張機能未導入、保存失敗はそれぞれ区別して案内する。Desktop UIが起動していないこと自体はWeb引用保存の失敗理由にしない。
 - ユーザーが保存前に原文と出典を確認できること。選択テキストを不必要に正規化・改変しない。
 - 初期版ではブラウザ内OCR、ページ全体スクロール合成、完全なオフラインWebアーカイブ、Web Store公開をスコープに混ぜない。
 - 実装方式が未決定の項目は小さな技術スパイクで可否を確かめ、選択に製品上の重大な影響があればオーナー判断へ戻す。
