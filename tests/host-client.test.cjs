@@ -10,7 +10,7 @@ const HOST_NAME = "org.maginalia.smoke_test";
 const SHELF_ID = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 
 function loadApi() {
-  const context = { TextEncoder, setTimeout, clearTimeout, console };
+  const context = { TextEncoder, URL, setTimeout, clearTimeout, console };
   vm.createContext(context);
   vm.runInContext(source, context);
   return context.CollectorHostClient;
@@ -82,7 +82,7 @@ test("exposes the experimental protocol without claiming it is a product contrac
   const api = loadApi();
 
   assert.equal(api.protocol, PROTOCOL);
-  assert.deepEqual(Array.from(api.operations), ["health", "configured_shelf"]);
+  assert.deepEqual(Array.from(api.operations), ["health", "configured_shelf", "save_web_quote"]);
   assert.equal(api.hostProfileKey, "collector.host-profile");
   assert.equal(source.includes("nativeMessaging"), false);
 });
@@ -295,6 +295,76 @@ test("reports compatibility only after health and the configured Shelf both vali
     ["shelf-identity", "pass"]
   ]);
   assert.deepEqual(Array.from(transport.requests, (request) => request.message.operation), ["health", "configured_shelf"]);
+});
+
+test("keeps quote saving disabled when the Host reports its normal read-only mode", async () => {
+  const { client, transport } = createClient((message) =>
+    message.operation === "health" ? healthResponse() : shelfResponse()
+  );
+
+  await rejectsWithCode(client.saveQuote({
+    requestId: "00000000-0000-4000-8000-000000000004",
+    quote: "Selected test quotation",
+    url: "https://example.com/",
+    getDate: "202611031200"
+  }), "host-save-disabled");
+  assert.deepEqual(Array.from(transport.requests, (item) => item.message.operation), ["health"]);
+});
+
+test("accepts only a persistent receipt bound to the request and configured Shelf", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000005";
+  const receipt = {
+    version: 1,
+    state: "committed",
+    requestId,
+    shelfId: SHELF_ID,
+    bookId: "book:01JBF5GD3RT8YCKM93Q5D9X0EX",
+    annotationId: "ann:01JBF5GD3RT8YCKM93Q5D9X0EY",
+    bookReused: false,
+    annotationDigest: `sha256:${"a".repeat(64)}`,
+    requestDigest: `sha256:${"b".repeat(64)}`,
+    recordedAt: "2026-11-03T03:00:00.000Z"
+  };
+  const { client, transport } = createClient((message) => {
+    if (message.operation === "health") return healthResponse({ operations: ["health", "configured_shelf", "save_web_quote"], writesEnabled: true });
+    if (message.operation === "configured_shelf") return shelfResponse({ writesEnabled: true });
+    return { protocol: PROTOCOL, ok: true, receipt };
+  });
+
+  const result = await client.saveQuote({ requestId, quote: "Selected test quotation", url: "https://example.com/", getDate: "202611031200" });
+
+  assert.equal(result.receipt.state, "committed");
+  assert.equal(result.receipt.requestId, requestId);
+  assert.equal(result.shelf.id, SHELF_ID);
+  assert.deepEqual(Array.from(transport.requests, (item) => item.message.operation), ["health", "configured_shelf", "save_web_quote"]);
+  const save = transport.requests.at(-1).message;
+  assert.equal(save.quote, "Selected test quotation");
+  assert.equal(save.url, "https://example.com/");
+  assert.equal(Object.hasOwn(save, "shelfRoot"), false);
+  assert.equal(Object.hasOwn(save, "coordinationRoot"), false);
+});
+
+test("retains pending data on malformed or mismatched Host receipts", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000006";
+  const baseReceipt = {
+    version: 1, state: "committed", requestId, shelfId: SHELF_ID,
+    bookId: "book:01JBF5GD3RT8YCKM93Q5D9X0EX", annotationId: "ann:01JBF5GD3RT8YCKM93Q5D9X0EY",
+    bookReused: false, annotationDigest: `sha256:${"a".repeat(64)}`,
+    requestDigest: `sha256:${"b".repeat(64)}`, recordedAt: "2026-11-03T03:00:00.000Z"
+  };
+  const responses = [
+    { ...baseReceipt, requestId: "00000000-0000-4000-8000-000000000099" },
+    { ...baseReceipt, shelfId: "750e8400-e29b-41d4-a716-446655440000" },
+    { ...baseReceipt, annotationId: "not-an-annotation" }
+  ];
+  for (const receipt of responses) {
+    const { client } = createClient((message) => {
+      if (message.operation === "health") return healthResponse({ operations: ["health", "configured_shelf", "save_web_quote"], writesEnabled: true });
+      if (message.operation === "configured_shelf") return shelfResponse({ writesEnabled: true });
+      return { protocol: PROTOCOL, ok: true, receipt };
+    });
+    await rejectsWithCode(client.saveQuote({ requestId, quote: "Selected test quotation", url: "https://example.com/", getDate: "202611031200" }), "invalid-response");
+  }
 });
 
 test("marks a helper without the configured Shelf operation as incompatible", async () => {

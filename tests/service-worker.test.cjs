@@ -445,7 +445,8 @@ test("capture page offers local browser holding without claiming Shelf save or H
   assert.doesNotMatch(captureHtml, /id="add-to-shelf"[^>]*disabled/);
   assert.match(captureHtml, /outbox\.js[\s\S]*capture\.js/);
   assert.match(captureHtml, /Private Shelf/);
-  assert.match(captureHtml, /Private Shelfへの保存完了を意味しません/);
+  assert.match(captureHtml, /通常の保留操作はPrivate Shelfへ送信しません/);
+  assert.match(captureHtml, /id="test-host-save"[^>]*hidden/);
   assert.match(captureScript, /addPending\(/);
   assert.match(captureScript, /Host未接続のため送信処理は行っていません/);
   assert.doesNotMatch(captureScript, /fetch\s*\(|XMLHttpRequest|storage\.(local|sync)|collector:save/i);

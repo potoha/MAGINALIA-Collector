@@ -89,13 +89,16 @@
           <fieldset>
             <legend>現在の保管先</legend>
             <p class="read-only">このブラウザー内の保留キュー</p>
-            <small>ブラウザー内の保留はPrivate Shelfへの保存完了を意味しません。Host連携は未実装のため、送信処理は行いません。</small>
+            <small>通常の保留操作はPrivate Shelfへ送信しません。隔離された開発用Hostがテスト専用保存を明示した場合だけ、下の専用操作を表示します。</small>
           </fieldset>
 
           <div class="actions">
             <button id="cancel" class="button-secondary" type="button">保存せずに閉じる</button>
             <button id="add-to-shelf" class="button-primary" type="button">
               このブラウザーに保留
+            </button>
+            <button id="test-host-save" class="button-primary" type="button" hidden>
+              テストHostへ保存（同じIDで再送確認）
             </button>
           </div>
         </div>

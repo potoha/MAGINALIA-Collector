@@ -110,6 +110,7 @@ function createCaptureHarness(addPending) {
   const chrome = {
     runtime: {
       lastError: null,
+      getManifest() { return { permissions: ["storage"] }; },
       sendMessage(message, callback) {
         messages.push(message);
         if (message.type === "collector:consume-capture") {
