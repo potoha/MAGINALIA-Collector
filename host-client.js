@@ -12,11 +12,12 @@
    * the outbox. A successful response proves only that the configured helper answered.
    */
   const EXPERIMENTAL_PROTOCOL = "maginalia.collector.experimental.v1";
-  const SUPPORTED_OPERATIONS = Object.freeze(["health", "configured_shelf"]);
+  const SUPPORTED_OPERATIONS = Object.freeze(["health", "configured_shelf", "save_web_quote"]);
   const HOST_PROFILE_KEY = "collector.host-profile";
   const DEFAULT_TIMEOUT_MS = 10000;
   const MAX_TIMEOUT_MS = 60000;
   const MAX_RESPONSE_BYTES = 64 * 1024;
+  const MAX_REQUEST_BYTES = 64 * 1024;
   const HOST_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
   const SHELF_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const OPERATION_NAME_PATTERN = /^[a-z][a-z0-9_]{0,47}$/;
@@ -36,6 +37,7 @@
     shelf_identity_mismatch: "shelf-identity-mismatch",
     shelf_unavailable: "shelf-unavailable",
     unsupported_operation: "unsupported-operation",
+    save_failed: "host-save-failed",
     invalid_request: "host-rejected-request",
     invalid_json: "host-protocol-error",
     invalid_frame_length: "host-protocol-error",
@@ -152,7 +154,7 @@
     const boundedTimeout = normalizeTimeout(timeoutMs);
     const expectedProtocol = normalizeProtocol(protocol);
 
-    function send(operation) {
+    function send(operation, fields = {}) {
       if (!configuredHostName) {
         return Promise.reject(createError("host-not-configured"));
       }
@@ -160,8 +162,11 @@
         return Promise.reject(createError("native-messaging-unavailable"));
       }
 
-      // Exactly two fields: the experimental helper rejects unknown keys.
-      const request = { protocol: expectedProtocol, operation };
+      // Callers provide only fields admitted by the operation-specific validator.
+      const request = { protocol: expectedProtocol, operation, ...fields };
+      if (measureJsonBytes(request) > MAX_REQUEST_BYTES) {
+        return Promise.reject(createError("host-request-too-large"));
+      }
 
       return new Promise((resolve, reject) => {
         let settled = false;
@@ -320,6 +325,57 @@
       });
     }
 
+    async function saveQuote({ requestId, quote, url, getDate, title, authors } = {}) {
+      if (typeof requestId !== "string" || !SHELF_ID_PATTERN.test(requestId)) {
+        throw createError("invalid-request");
+      }
+      if (typeof quote !== "string" || quote.trim().length === 0 || typeof url !== "string" || url.length > 8192
+        || typeof getDate !== "string" || !/^\d{12}$/.test(getDate)) {
+        throw createError("invalid-request");
+      }
+      try {
+        const source = new URL(url);
+        if (source.protocol !== "http:" && source.protocol !== "https:") throw createError("invalid-request");
+      } catch { throw createError("invalid-request"); }
+      if (title !== undefined && (typeof title !== "string" || title.length > 2048)) throw createError("invalid-request");
+      if (authors !== undefined && (!Array.isArray(authors) || authors.length > 8
+        || authors.some((author) => typeof author !== "string" || author.length === 0 || author.length > 512))) {
+        throw createError("invalid-request");
+      }
+
+      const host = await health();
+      if (!host.writesEnabled || !host.operations.includes("save_web_quote")) throw createError("host-save-disabled");
+      const shelf = await configuredShelf();
+      if (!shelf.writesEnabled || shelf.type !== "private") throw createError("host-save-disabled");
+
+      const fields = {
+        requestId,
+        quote,
+        url,
+        getDate,
+        ...(title ? { title } : {}),
+        ...(authors === undefined ? {} : { authors })
+      };
+      const envelope = readEnvelope(await send("save_web_quote", fields));
+      if (!hasExactKeys(envelope, ["protocol", "ok", "receipt"])) throw createError("invalid-response");
+      const receipt = envelope.receipt;
+      const receiptKeys = ["version", "state", "requestId", "shelfId", "bookId", "annotationId", "bookReused", "annotationDigest", "requestDigest", "recordedAt"];
+      if (!hasExactKeys(receipt, receiptKeys)
+        || receipt.version !== 1
+        || (receipt.state !== "committed" && receipt.state !== "already-committed")
+        || receipt.requestId !== requestId
+        || typeof receipt.shelfId !== "string" || receipt.shelfId.toLowerCase() !== shelf.id.toLowerCase()
+        || typeof receipt.bookId !== "string" || !/^book:[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(receipt.bookId)
+        || typeof receipt.annotationId !== "string" || !/^ann:[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(receipt.annotationId)
+        || typeof receipt.bookReused !== "boolean"
+        || typeof receipt.annotationDigest !== "string" || !/^sha256:[a-f0-9]{64}$/.test(receipt.annotationDigest)
+        || typeof receipt.requestDigest !== "string" || !/^sha256:[a-f0-9]{64}$/.test(receipt.requestDigest)
+        || typeof receipt.recordedAt !== "string" || !Number.isFinite(Date.parse(receipt.recordedAt))) {
+        throw createError("invalid-response");
+      }
+      return Object.freeze({ shelf, receipt: Object.freeze({ ...receipt }) });
+    }
+
     /**
      * Verifies that this client and the installed helper agree on the experimental
      * contract. Never throws: the caller renders the report, including failures.
@@ -381,7 +437,7 @@
       return report;
     }
 
-    return Object.freeze({ health, configuredShelf, checkCompatibility, hostName: configuredHostName });
+    return Object.freeze({ health, configuredShelf, saveQuote, checkCompatibility, hostName: configuredHostName });
   }
 
   globalThis.CollectorHostClient = Object.freeze({
@@ -391,6 +447,7 @@
     operations: SUPPORTED_OPERATIONS,
     hostProfileKey: HOST_PROFILE_KEY,
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
-    maxResponseBytes: MAX_RESPONSE_BYTES
+    maxResponseBytes: MAX_RESPONSE_BYTES,
+    maxRequestBytes: MAX_REQUEST_BYTES
   });
 })();

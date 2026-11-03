@@ -2,7 +2,7 @@
 // extension page, so the helper bridge lives here rather than in page scripts.
 if (typeof importScripts === "function") {
   try {
-    importScripts("host-client.js");
+    importScripts("host-client.js", "outbox.js");
   } catch {
     console.warn("Collector helper client is unavailable.");
   }
@@ -367,6 +367,73 @@ async function checkHostConnection() {
   return { ok: true, report: await client.checkCompatibility() };
 }
 
+async function savePendingQuote(requestId) {
+  const clientApi = globalThis.CollectorHostClient;
+  const outboxApi = globalThis.CollectorOutbox;
+  if (!clientApi?.createHostClient || !outboxApi?.create) return { ok: false, code: "native-messaging-unavailable" };
+
+  let item;
+  const outbox = outboxApi.create();
+  try {
+    item = await outbox.getPending(requestId);
+  } catch {
+    return { ok: false, code: "outbox-unavailable" };
+  }
+  if (!item || item.kind !== "quote" || !item.payload || typeof item.payload !== "object") {
+    return { ok: false, code: "pending-quote-unavailable" };
+  }
+
+  const profile = await clientApi.loadHostProfile(chrome.storage?.local);
+  const client = clientApi.createHostClient({
+    hostName: profile?.hostName ?? "",
+    sendNativeMessage: (name, message, callback) => chrome.runtime.sendNativeMessage(name, message, callback),
+    getLastError: () => chrome.runtime.lastError
+  });
+  const payload = item.payload;
+  const quote = {
+    requestId: item.requestId,
+    quote: payload.quote,
+    url: payload.pageUrl,
+    getDate: payload.acquiredAt,
+    ...(payload.title ? { title: payload.title } : {}),
+    ...(payload.author ? { authors: [payload.author] } : {})
+  };
+
+  let first;
+  let duplicate;
+  try {
+    first = await client.saveQuote(quote);
+    // The isolated E2E mode deliberately resends the same durable request once.
+    // The Outbox is cleared only after the common Writer confirms an idempotent receipt.
+    duplicate = await client.saveQuote(quote);
+  } catch (error) {
+    return { ok: false, code: typeof error?.code === "string" ? error.code : "host-save-failed" };
+  }
+
+  if (duplicate.receipt.state !== "already-committed"
+    || first.receipt.requestDigest !== duplicate.receipt.requestDigest
+    || first.receipt.bookId !== duplicate.receipt.bookId
+    || first.receipt.annotationId !== duplicate.receipt.annotationId
+    || first.receipt.annotationDigest !== duplicate.receipt.annotationDigest) {
+    return { ok: false, code: "idempotency-verification-failed" };
+  }
+
+  let queueCleared = false;
+  try {
+    queueCleared = (await outbox.deletePending(item.requestId)).deleted === true;
+  } catch {
+    // A persistent Host receipt is authoritative. If queue cleanup fails, retaining
+    // the duplicate request is safe and lets the user retry without data loss.
+  }
+  return {
+    ok: true,
+    receipt: first.receipt,
+    duplicateReceipt: duplicate.receipt,
+    shelf: first.shelf,
+    queueCleared
+  };
+}
+
 function handleExtensionMessage(message, sender, sendResponse) {
   if (message?.type === "collector:host-check") {
     if (!isExtensionPageSender(sender)) {
@@ -375,6 +442,14 @@ function handleExtensionMessage(message, sender, sendResponse) {
     void checkHostConnection()
       .then((response) => sendResponse(response))
       .catch(() => sendResponse({ ok: false, code: "host-check-failed" }));
+    return true;
+  }
+
+  if (message?.type === "collector:test-save-pending-quote") {
+    if (!isCaptureRequestSender(sender, message.requestId)) return false;
+    void savePendingQuote(message.requestId)
+      .then((response) => sendResponse(response))
+      .catch(() => sendResponse({ ok: false, code: "host-save-failed" }));
     return true;
   }
 

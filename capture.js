@@ -9,11 +9,13 @@ const noticeList = document.getElementById("review-notices-list");
 const cancelButton = document.getElementById("cancel");
 const errorCloseButton = document.getElementById("error-close");
 const saveButton = document.getElementById("add-to-shelf");
+const testHostSaveButton = document.getElementById("test-host-save");
 const outbox = globalThis.CollectorOutbox?.create();
 let activeRequestId = null;
 let sourcePayload = null;
 let isSaving = false;
 let isQueued = false;
+let isSendingToTestHost = false;
 let closeApproved = false;
 
 const ERROR_COPY = {
@@ -22,6 +24,17 @@ const ERROR_COPY = {
   "page-unavailable": "対象ページのURLを確認できませんでした。HTTPまたはHTTPSのページでやり直してください。",
   "transfer-unavailable": "引用の一時受け渡しを開始できませんでした。選択内容は保存されていません。もう一度選択してください。",
   "open-failed": "確認画面を開けませんでした。選択内容は保存されていません。"
+};
+
+const TEST_SAVE_COPY = {
+  "host-not-configured": "MAGINALIA側のテスト接続設定がありません。引用はブラウザー内に保留したままです。",
+  "host-not-registered": "テストHostが登録されていません。引用はブラウザー内に保留したままです。",
+  "host-access-forbidden": "このテスト拡張機能はHostから許可されていません。引用はブラウザー内に保留したままです。",
+  "host-save-disabled": "Hostのテスト専用保存が有効ではありません。引用はブラウザー内に保留したままです。",
+  "shelf-identity-mismatch": "設定ShelfのUUIDが一致しません。引用はブラウザー内に保留したままです。",
+  "shelf-not-configured": "MAGINALIA側にShelfが設定されていません。引用はブラウザー内に保留したままです。",
+  "idempotency-verification-failed": "同じ依頼IDの再送結果を確認できませんでした。引用はブラウザー内に保留したままです。",
+  "host-save-failed": "Shelfへの耐久保存receiptを確認できませんでした。引用はブラウザー内に保留したままです。"
 };
 
 function setValue(id, value) {
@@ -95,6 +108,66 @@ function renderCapture(payload) {
 
   if (noticeList.childElementCount > 0) {
     notices.hidden = false;
+  }
+  void checkTestHostWriteMode();
+}
+
+function requestExtensionMessage(message) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) resolve(null);
+        else resolve(response ?? null);
+      });
+    } catch { resolve(null); }
+  });
+}
+
+async function checkTestHostWriteMode() {
+  const manifest = chrome.runtime?.getManifest?.();
+  if (!Array.isArray(manifest?.permissions) || !manifest.permissions.includes("nativeMessaging")) return;
+  const response = await requestExtensionMessage({ type: "collector:host-check" });
+  const report = response?.ok === true ? response.report : null;
+  const testOnlyEnabled = report?.status === "compatible"
+    && report.host?.writesEnabled === true
+    && Array.isArray(report.host?.operations)
+    && report.host.operations.includes("save_web_quote")
+    && report.shelf?.type === "private"
+    && report.shelf?.writesEnabled === true;
+  testHostSaveButton.hidden = !testOnlyEnabled;
+}
+
+async function savePendingQuoteToTestHost() {
+  if (isSendingToTestHost || !activeRequestId || !sourcePayload) return;
+  if (!isQueued) {
+    await saveToBrowserQueue();
+    if (!isQueued) return;
+  }
+
+  isSendingToTestHost = true;
+  testHostSaveButton.disabled = true;
+  saveStatus.textContent = "隔離テストHostへ送信中です。耐久receiptと同じIDの再送結果を確認しています。";
+  try {
+    const response = await requestExtensionMessage({
+      type: "collector:test-save-pending-quote",
+      requestId: activeRequestId
+    });
+    if (response?.ok !== true || !response.receipt || !response.duplicateReceipt) {
+      const code = typeof response?.code === "string" ? response.code : "host-save-failed";
+      saveStatus.textContent = TEST_SAVE_COPY[code] || TEST_SAVE_COPY["host-save-failed"];
+      return;
+    }
+    testHostSaveButton.textContent = "Shelf v0.4へ保存済み（再送済み・重複なし）";
+    testHostSaveButton.disabled = true;
+    saveButton.textContent = "Private Shelfへ保存済み";
+    saveStatus.textContent = response.queueCleared === true
+      ? `Private Shelfの耐久receiptを確認しました（${response.receipt.state} → ${response.duplicateReceipt.state}）。同じ依頼IDの再送は既存レコードを返し、重複作成しませんでした。`
+      : `Private Shelfの耐久receiptを確認しました（${response.receipt.state} → ${response.duplicateReceipt.state}）。ブラウザーの保留データも残っています。再送は同じ依頼IDで安全に確認できます。`;
+  } finally {
+    isSendingToTestHost = false;
+    if (!testHostSaveButton.disabled || !testHostSaveButton.textContent.includes("保存済み")) {
+      testHostSaveButton.disabled = false;
+    }
   }
 }
 
@@ -229,6 +302,9 @@ cancelButton.addEventListener("click", () => {
 });
 saveButton.addEventListener("click", () => {
   void saveToBrowserQueue();
+});
+testHostSaveButton.addEventListener("click", () => {
+  void savePendingQuoteToTestHost();
 });
 errorCloseButton.addEventListener("click", () => {
   void closeCapturePage(errorCloseButton);
