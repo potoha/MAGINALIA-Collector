@@ -137,6 +137,17 @@ function createQueueItem(item) {
     : "ブラウザー内に保留中 · Private Shelf未保存";
   article.append(state);
 
+  if (item.kind === "quote") {
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "queue-item-open";
+    openButton.textContent = "保留を開く";
+    openButton.addEventListener("click", () => {
+      void openPendingQuote(item, openButton);
+    });
+    article.append(openButton);
+  }
+
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.textContent = "この引用を削除";
@@ -145,6 +156,19 @@ function createQueueItem(item) {
   });
   article.append(removeButton);
   return article;
+}
+
+async function openPendingQuote(item, button) {
+  button.disabled = true;
+  const query = new URLSearchParams({ requestId: item.requestId, from: "outbox" });
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL(`capture.html?${query.toString()}`)
+    });
+  } catch {
+    status.textContent = "保留中の引用を開けませんでした。保留データは削除されていません。";
+    button.disabled = false;
+  }
 }
 
 async function deleteQueueItem(item, button) {
