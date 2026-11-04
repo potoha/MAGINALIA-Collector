@@ -82,7 +82,7 @@ function sendHostCheck(harness, sender = { id: RUNTIME_ID, url: `chrome-extensio
   });
 }
 
-function sendPendingQuote(harness, requestId, sender = { id: RUNTIME_ID, url: `chrome-extension://${RUNTIME_ID}/capture.html?requestId=${requestId}` }) {
+function sendPendingQuote(harness, requestId, sender = { id: RUNTIME_ID, url: `chrome-extension://${RUNTIME_ID}/capture.html?requestId=${requestId}&from=outbox` }) {
   return new Promise((resolve) => {
     const handled = harness.listeners.onMessage({ type: "collector:test-save-pending-quote", requestId }, sender, resolve);
     if (handled !== true) resolve({ ok: false, code: "rejected" });

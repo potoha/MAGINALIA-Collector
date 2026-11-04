@@ -140,6 +140,12 @@ h1 {
   cursor: pointer;
 }
 
+.queue-item .queue-item-open {
+  margin-right: 8px;
+  border-color: #535a81;
+  color: #383e64;
+}
+
 .queue-item button:focus-visible {
   outline: 3px solid #535a81;
   outline-offset: 2px;

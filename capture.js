@@ -10,6 +10,7 @@ const cancelButton = document.getElementById("cancel");
 const errorCloseButton = document.getElementById("error-close");
 const saveButton = document.getElementById("add-to-shelf");
 const testHostSaveButton = document.getElementById("test-host-save");
+const recoveryNotice = document.getElementById("outbox-recovery-notice");
 const outbox = globalThis.CollectorOutbox?.create();
 let activeRequestId = null;
 let sourcePayload = null;
@@ -18,12 +19,25 @@ let isQueued = false;
 let isSendingToTestHost = false;
 let closeApproved = false;
 
+const params = new URLSearchParams(window.location.search);
+const requestId = params.get("requestId");
+const errorReason = params.get("error");
+const recoveryMode = params.get("from") === "outbox";
+const REQUEST_ID_PATTERN = /^[0-9a-f-]{36}$/i;
+const PENDING_QUOTE_STRING_FIELDS = [
+  "originalQuote", "quote", "title", "siteName", "pageUrl", "author", "publishedAt",
+  "canonicalUrl", "frameUrl", "acquiredAt", "metadataStatus", "comment"
+];
+
 const ERROR_COPY = {
   "selection-missing": "選択範囲を取得できませんでした。Webページで文章を選び直してください。",
   "editable-selection": "入力欄で選択された文字は引用画面に取り込みません。通常の本文を選択してください。",
   "page-unavailable": "対象ページのURLを確認できませんでした。HTTPまたはHTTPSのページでやり直してください。",
   "transfer-unavailable": "引用の一時受け渡しを開始できませんでした。選択内容は保存されていません。もう一度選択してください。",
-  "open-failed": "確認画面を開けませんでした。選択内容は保存されていません。"
+  "open-failed": "確認画面を開けませんでした。選択内容は保存されていません。",
+  "invalid-request-id": "保留中の引用の識別情報を確認できませんでした。保留データは削除されていません。",
+  "outbox-unavailable": "保留領域を読み込めませんでした。保留データは削除されていません。保存領域を確認してください。",
+  "pending-quote-unavailable": "保留中の引用が見つからないか、内容を確認できません。保留データは削除されていません。"
 };
 
 const TEST_SAVE_COPY = {
@@ -50,12 +64,17 @@ function addNotice(message) {
 
 function showError(reason) {
   entry.hidden = true;
+  recoveryNotice.hidden = true;
   errorPanel.hidden = false;
-  heading.textContent = "引用を確認できません";
-  errorHeading.textContent = "引用を開けませんでした";
+  heading.textContent = recoveryMode ? "保留中の引用を確認できません" : "引用を確認できません";
+  errorHeading.textContent = recoveryMode ? "保留中の引用を開けませんでした" : "引用を開けませんでした";
   errorMessage.textContent =
-    ERROR_COPY[reason] || "引用データを受け取れませんでした。Webページで選択し直してください。";
-  saveStatus.textContent = "この画面では引用の保存・送信は行われません。";
+    ERROR_COPY[reason] || (recoveryMode
+      ? ERROR_COPY["pending-quote-unavailable"]
+      : "引用データを受け取れませんでした。Webページで選択し直してください。");
+  saveStatus.textContent = recoveryMode
+    ? "この画面では保存・送信を行いません。保留データは削除されていません。"
+    : "この画面では引用の保存・送信は行われません。";
 }
 
 function formatAcquisitionTime(value) {
@@ -68,6 +87,95 @@ function formatAcquisitionTime(value) {
   );
 }
 
+function isValidAcquisitionTime(value) {
+  if (typeof value !== "string" || !/^\d{12}$/.test(value)) {
+    return false;
+  }
+
+  const year = Number(value.slice(0, 4));
+  const month = Number(value.slice(4, 6));
+  const day = Number(value.slice(6, 8));
+  const hour = Number(value.slice(8, 10));
+  const minute = Number(value.slice(10, 12));
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, 0, 0);
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute;
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isRecoverablePendingQuote(item, expectedRequestId) {
+  const payload = item?.payload;
+  if (!item || item.requestId !== expectedRequestId || item.kind !== "quote"
+    || item.localStatus !== "pending" || item.recipient !== "private-shelf"
+    || item.recipientStatus !== "not-sent" || !payload || typeof payload !== "object"
+    || Array.isArray(payload)) {
+    return false;
+  }
+
+  if (!PENDING_QUOTE_STRING_FIELDS.every((field) => typeof payload[field] === "string")
+    || payload.quote.trim().length === 0 || payload.originalQuote.trim().length === 0
+    || !isHttpUrl(payload.pageUrl) || !isValidAcquisitionTime(payload.acquiredAt)
+    || typeof payload.isFrameSelection !== "boolean"
+    || (payload.selectionMatches !== null && typeof payload.selectionMatches !== "boolean")
+    || !["available", "access-limited", "unavailable", "page-changed"].includes(payload.metadataStatus)) {
+    return false;
+  }
+
+  return true;
+}
+
+function setRecoveredFieldsReadOnly() {
+  for (const id of ["page-title", "site-name", "page-url", "author", "published-at", "quote", "comment"]) {
+    document.getElementById(id).readOnly = true;
+  }
+}
+
+async function restorePendingQuote(requestId) {
+  if (typeof requestId !== "string" || !REQUEST_ID_PATTERN.test(requestId)) {
+    showError("invalid-request-id");
+    return;
+  }
+  if (!outbox) {
+    showError("outbox-unavailable");
+    return;
+  }
+
+  let item;
+  try {
+    item = await outbox.getPending(requestId);
+  } catch {
+    showError("outbox-unavailable");
+    return;
+  }
+  if (!isRecoverablePendingQuote(item, requestId)) {
+    showError("pending-quote-unavailable");
+    return;
+  }
+
+  activeRequestId = requestId;
+  isQueued = true;
+  setRecoveredFieldsReadOnly();
+  saveButton.hidden = true;
+  cancelButton.textContent = "閉じる";
+  recoveryNotice.hidden = false;
+  heading.textContent = "保留中の引用を確認";
+  saveStatus.textContent = "保留中の引用を読み込みました。内容を確認するだけでは送信されません。";
+  renderCapture(item.payload);
+}
+
 function renderCapture(payload) {
   sourcePayload = payload;
   entry.hidden = false;
@@ -78,6 +186,7 @@ function renderCapture(payload) {
   setValue("author", payload.author);
   setValue("published-at", payload.publishedAt);
   setValue("quote", payload.quote);
+  setValue("comment", payload.comment);
   document.getElementById("acquired-at").textContent =
     formatAcquisitionTime(payload.acquiredAt);
 
@@ -272,12 +381,10 @@ window.addEventListener("beforeunload", (event) => {
   }
 });
 
-const params = new URLSearchParams(window.location.search);
-const requestId = params.get("requestId");
-const errorReason = params.get("error");
-
 if (errorReason) {
   showError(errorReason);
+} else if (recoveryMode) {
+  void restorePendingQuote(requestId);
 } else if (!requestId) {
   showError("selection-missing");
 } else {

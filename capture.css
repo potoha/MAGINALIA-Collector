@@ -136,6 +136,12 @@ textarea {
   line-height: 1.6;
 }
 
+input:read-only,
+textarea:read-only {
+  background: #f2f0e9;
+  color: #514f49;
+}
+
 input:focus-visible,
 textarea:focus-visible,
 button:focus-visible {
