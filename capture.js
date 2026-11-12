@@ -8,15 +8,17 @@ const notices = document.getElementById("review-notices");
 const noticeList = document.getElementById("review-notices-list");
 const cancelButton = document.getElementById("cancel");
 const errorCloseButton = document.getElementById("error-close");
-const saveButton = document.getElementById("add-to-shelf");
-const testHostSaveButton = document.getElementById("test-host-save");
+const holdButton = document.getElementById("hold-in-browser");
+const shelfSaveButton = document.getElementById("save-to-shelf");
+const shelfStatus = document.getElementById("shelf-status");
 const recoveryNotice = document.getElementById("outbox-recovery-notice");
 const outbox = globalThis.CollectorOutbox?.create();
 let activeRequestId = null;
 let sourcePayload = null;
 let isSaving = false;
 let isQueued = false;
-let isSendingToTestHost = false;
+let isSendingToShelf = false;
+let isSavedToShelf = false;
 let closeApproved = false;
 
 const params = new URLSearchParams(window.location.search);
@@ -40,16 +42,74 @@ const ERROR_COPY = {
   "pending-quote-unavailable": "保留中の引用が見つからないか、内容を確認できません。保留データは削除されていません。"
 };
 
-const TEST_SAVE_COPY = {
-  "host-not-configured": "MAGINALIA側のテスト接続設定がありません。引用はブラウザー内に保留したままです。",
-  "host-not-registered": "テストHostが登録されていません。引用はブラウザー内に保留したままです。",
-  "host-access-forbidden": "このテスト拡張機能はHostから許可されていません。引用はブラウザー内に保留したままです。",
-  "host-save-disabled": "Hostのテスト専用保存が有効ではありません。引用はブラウザー内に保留したままです。",
-  "shelf-identity-mismatch": "設定ShelfのUUIDが一致しません。引用はブラウザー内に保留したままです。",
-  "shelf-not-configured": "MAGINALIA側にShelfが設定されていません。引用はブラウザー内に保留したままです。",
-  "idempotency-verification-failed": "同じ依頼IDの再送結果を確認できませんでした。引用はブラウザー内に保留したままです。",
-  "host-save-failed": "Shelfへの耐久保存receiptを確認できませんでした。引用はブラウザー内に保留したままです。"
+const PENDING_KEPT = "引用はこのブラウザーに保留したままです。";
+
+// Cause-specific copy for a failed save. None of these may read as success.
+const SAVE_FAILURE_COPY = {
+  "host-not-registered":
+    "MAGINALIA連携プログラムがこのパソコンに登録されていません。導入ガイドに沿って連携プログラムを導入してから、もう一度保存してください。",
+  "host-not-configured":
+    "MAGINALIA連携プログラムの接続先を確認できませんでした。導入ガイドに沿って連携プログラムを導入し直してください。",
+  "host-access-forbidden":
+    "MAGINALIA連携プログラムがこの拡張機能からの接続を許可していません。導入ガイドの手順で拡張機能と連携プログラムを確認してください。",
+  "host-configuration-invalid":
+    "MAGINALIA連携プログラムの設定を確認できませんでした。連携プログラムを導入し直してください。",
+  "shelf-not-configured":
+    "保存先の本棚がまだ設定されていません。MAGINALIAで「Collector の保存先」を設定してから、もう一度保存してください。",
+  "shelf-configuration-unavailable":
+    "保存先の設定を読み取れませんでした。MAGINALIAで「Collector の保存先」を確認してから、もう一度保存してください。",
+  "shelf-identity-mismatch":
+    "設定された本棚と、見つかった本棚の識別子が一致しません。MAGINALIAで「Collector の保存先」を確認し直してください。",
+  "shelf-identity-unavailable":
+    "本棚の識別子を確認できませんでした。MAGINALIAで「Collector の保存先」を確認してください。",
+  "shelf-unavailable":
+    "保存先の本棚を開けませんでした。本棚のフォルダーがあるか、MAGINALIAで確認してください。",
+  "shelf-write-busy":
+    "本棚をほかの処理が使用中のため、保存できませんでした。少し待ってから、もう一度保存してください。",
+  "host-timeout":
+    "MAGINALIA連携プログラムから時間内に応答がありませんでした。本棚に保存されたかどうかは確認できていません。もう一度保存しても、同じ引用が二重に保存されることはありません。",
+  "host-save-failed":
+    "本棚への書き込みを完了できませんでした。もう一度保存してください。繰り返し失敗する場合は、MAGINALIAで本棚の状態を確認してください。",
+  "host-save-disabled":
+    "MAGINALIA連携プログラムが、いまは本棚への保存を受け付けていません。MAGINALIAで「Collector の保存先」を確認してください。",
+  "unsupported-operation":
+    "MAGINALIA連携プログラムが、いまは本棚への保存を受け付けていません。連携プログラムの版と、MAGINALIAの「Collector の保存先」を確認してください。",
+  "invalid-response":
+    "MAGINALIA連携プログラムの応答を確認できなかったため、保存できたとは判断していません。連携プログラムの版を確認してください。",
+  "host-protocol-error":
+    "MAGINALIA連携プログラムとのやり取りの形式が合いませんでした。連携プログラムの版を確認してください。",
+  "host-response-too-large":
+    "MAGINALIA連携プログラムの応答を読み取れませんでした。連携プログラムの版を確認してください。",
+  "host-rejected-request":
+    "MAGINALIA連携プログラムがこの引用を受け付けませんでした。",
+  "host-exited":
+    "MAGINALIA連携プログラムが途中で終了しました。もう一度保存してください。",
+  "host-communication-failed":
+    "MAGINALIA連携プログラムとやり取りできませんでした。もう一度保存してください。",
+  "host-unreachable":
+    "MAGINALIA連携プログラムに届きませんでした。もう一度保存してください。",
+  "host-no-response":
+    "MAGINALIA連携プログラムから応答がありませんでした。もう一度保存してください。",
+  "native-messaging-unavailable":
+    "このブラウザーでは、MAGINALIA連携プログラムとの接続を利用できません。",
+  "invalid-request":
+    "保留中の引用の内容を確認できなかったため、送信していません。",
+  "pending-quote-unavailable":
+    "保留中の引用を読み込めなかったため、送信していません。",
+  "outbox-unavailable":
+    "ブラウザー内の保留領域を読み込めなかったため、送信していません。",
+  "save-in-progress":
+    "この引用はすでに保存処理中です。完了するまでお待ちください。"
 };
+
+const SAVE_FAILURE_GENERIC = "本棚に保存できませんでした。";
+
+function saveFailureCopy(code) {
+  const message = typeof code === "string" && Object.hasOwn(SAVE_FAILURE_COPY, code)
+    ? SAVE_FAILURE_COPY[code]
+    : SAVE_FAILURE_GENERIC;
+  return `${message}${PENDING_KEPT}`;
+}
 
 function setValue(id, value) {
   const field = document.getElementById(id);
@@ -168,11 +228,11 @@ async function restorePendingQuote(requestId) {
   activeRequestId = requestId;
   isQueued = true;
   setRecoveredFieldsReadOnly();
-  saveButton.hidden = true;
+  holdButton.hidden = true;
   cancelButton.textContent = "閉じる";
   recoveryNotice.hidden = false;
   heading.textContent = "保留中の引用を確認";
-  saveStatus.textContent = "保留中の引用を読み込みました。内容を確認するだけでは送信されません。";
+  saveStatus.textContent = "保留中の引用を読み込みました。開いただけでは送信されません。";
   renderCapture(item.payload);
 }
 
@@ -218,7 +278,7 @@ function renderCapture(payload) {
   if (noticeList.childElementCount > 0) {
     notices.hidden = false;
   }
-  void checkTestHostWriteMode();
+  void checkShelfAvailability();
 }
 
 function requestExtensionMessage(message) {
@@ -232,51 +292,99 @@ function requestExtensionMessage(message) {
   });
 }
 
-async function checkTestHostWriteMode() {
-  const manifest = chrome.runtime?.getManifest?.();
-  if (!Array.isArray(manifest?.permissions) || !manifest.permissions.includes("nativeMessaging")) return;
+// Shows whether the Host can currently save to the configured Private Shelf. This
+// check writes nothing. The save button stays usable either way: a click always
+// holds the quote in the browser first, and the Service Worker asks the Host
+// again before sending, so nothing is sent unless the Host reports
+// save_web_quote for the configured Shelf.
+async function checkShelfAvailability() {
   const response = await requestExtensionMessage({ type: "collector:host-check" });
+  if (isSendingToShelf || isSavedToShelf) return;
   const report = response?.ok === true ? response.report : null;
-  const testOnlyEnabled = report?.status === "compatible"
+  if (!report) {
+    shelfStatus.textContent = "MAGINALIAとの接続を確認できませんでした。「本棚に保存」を押すと、もう一度確認します。";
+    return;
+  }
+  const canSave = report.status === "compatible"
     && report.host?.writesEnabled === true
     && Array.isArray(report.host?.operations)
     && report.host.operations.includes("save_web_quote")
     && report.shelf?.type === "private"
     && report.shelf?.writesEnabled === true;
-  testHostSaveButton.hidden = !testOnlyEnabled;
+  if (canSave) {
+    const name = typeof report.shelf.name === "string" ? report.shelf.name : "";
+    shelfStatus.textContent = `MAGINALIAの本棚「${name}」に保存できます。`;
+    return;
+  }
+  const code = report.status === "compatible" ? "host-save-disabled" : report.code;
+  const message = typeof code === "string" && Object.hasOwn(SAVE_FAILURE_COPY, code)
+    ? SAVE_FAILURE_COPY[code]
+    : "MAGINALIAとの接続を確認できませんでした。";
+  shelfStatus.textContent = `いまは本棚に保存できません。${message}このブラウザーに保留して、後で保存することもできます。`;
 }
 
-async function savePendingQuoteToTestHost() {
-  if (isSendingToTestHost || !activeRequestId || !sourcePayload) return;
+function isDurableReceipt(receipt) {
+  return Boolean(receipt)
+    && (receipt.state === "committed" || receipt.state === "already-committed")
+    && receipt.requestId === activeRequestId;
+}
+
+function showShelfSaveFailure(code) {
+  shelfSaveButton.textContent = "もう一度保存";
+  shelfSaveButton.disabled = false;
+  saveStatus.textContent = saveFailureCopy(code);
+}
+
+// One explicit click sends one save request for this request ID. A resend is
+// another explicit click; the Host answers it idempotently.
+async function saveToShelf() {
+  if (isSendingToShelf || isSavedToShelf || isSaving || !activeRequestId || !sourcePayload) return;
   if (!isQueued) {
     await saveToBrowserQueue();
     if (!isQueued) return;
   }
 
-  isSendingToTestHost = true;
-  testHostSaveButton.disabled = true;
-  saveStatus.textContent = "隔離テストHostへ送信中です。耐久receiptと同じIDの再送結果を確認しています。";
+  isSendingToShelf = true;
+  shelfSaveButton.disabled = true;
+  shelfSaveButton.textContent = "保存中…";
+  holdButton.disabled = true;
+  cancelButton.disabled = true;
+  saveStatus.textContent = "本棚に保存しています。画面を閉じずにお待ちください。";
   try {
     const response = await requestExtensionMessage({
-      type: "collector:test-save-pending-quote",
+      type: "collector:save-pending-quote",
       requestId: activeRequestId
     });
-    if (response?.ok !== true || !response.receipt || !response.duplicateReceipt) {
-      const code = typeof response?.code === "string" ? response.code : "host-save-failed";
-      saveStatus.textContent = TEST_SAVE_COPY[code] || TEST_SAVE_COPY["host-save-failed"];
+    if (response?.ok !== true) {
+      showShelfSaveFailure(response?.code);
       return;
     }
-    testHostSaveButton.textContent = "Shelf v0.4へ保存済み（再送済み・重複なし）";
-    testHostSaveButton.disabled = true;
-    saveButton.textContent = "Private Shelfへ保存済み";
-    saveStatus.textContent = response.queueCleared === true
-      ? `Private Shelfの耐久receiptを確認しました（${response.receipt.state} → ${response.duplicateReceipt.state}）。同じ依頼IDの再送は既存レコードを返し、重複作成しませんでした。`
-      : `Private Shelfの耐久receiptを確認しました（${response.receipt.state} → ${response.duplicateReceipt.state}）。ブラウザーの保留データも残っています。再送は同じ依頼IDで安全に確認できます。`;
-  } finally {
-    isSendingToTestHost = false;
-    if (!testHostSaveButton.disabled || !testHostSaveButton.textContent.includes("保存済み")) {
-      testHostSaveButton.disabled = false;
+    if (!isDurableReceipt(response.receipt)) {
+      showShelfSaveFailure("invalid-response");
+      return;
     }
+    if (response.result === "saved" && response.queueCleared === true) {
+      isSavedToShelf = true;
+      shelfSaveButton.textContent = "保存しました";
+      shelfSaveButton.disabled = true;
+      holdButton.hidden = true;
+      const name = typeof response.shelf?.name === "string" ? response.shelf.name : "";
+      saveStatus.textContent = name ? `保存しました。本棚「${name}」に引用を追加しました。` : "保存しました。";
+      shelfStatus.textContent = "この引用は本棚に保存済みです。";
+      return;
+    }
+    if (response.result === "saved-but-local-pending") {
+      shelfSaveButton.textContent = "もう一度保存";
+      shelfSaveButton.disabled = false;
+      saveStatus.textContent = "本棚には保存済みですが、この端末の保留が残っています。"
+        + "もう一度保存を押すと、二重に保存せずに保留を片付けます。ツールバー画面から保留を削除することもできます。";
+      return;
+    }
+    showShelfSaveFailure("invalid-response");
+  } finally {
+    isSendingToShelf = false;
+    cancelButton.disabled = false;
+    cancelButton.textContent = "閉じる";
   }
 }
 
@@ -335,7 +443,7 @@ async function saveToBrowserQueue() {
   };
 
   isSaving = true;
-  saveButton.disabled = true;
+  holdButton.disabled = true;
   cancelButton.disabled = true;
   saveStatus.textContent = "このブラウザー内に保留しています。画面を閉じずにお待ちください。";
   try {
@@ -349,14 +457,14 @@ async function saveToBrowserQueue() {
     entry.querySelectorAll("fieldset").forEach((fieldset) => {
       fieldset.disabled = true;
     });
-    saveButton.textContent = result.alreadyQueued ? "保留済み" : "ブラウザー内に保留済み";
+    holdButton.textContent = result.alreadyQueued ? "保留済み" : "ブラウザー内に保留済み";
     cancelButton.textContent = "閉じる";
     saveStatus.textContent = result.alreadyQueued
-      ? "この引用はすでにブラウザー内に保留されています。Private Shelfにはまだ保存されていません。Host未接続のため送信処理は行っていません。"
-      : "ブラウザー内に保留しました。Private Shelfにはまだ保存されていません。Host未接続のため送信処理は行っていません。";
+      ? "この引用はすでにブラウザー内に保留されています。本棚にはまだ保存されていません。"
+      : "ブラウザー内に保留しました。本棚にはまだ保存されていません。";
   } catch (error) {
     saveStatus.textContent = outboxErrorCopy(error);
-    saveButton.disabled = false;
+    holdButton.disabled = false;
   } finally {
     isSaving = false;
     cancelButton.disabled = false;
@@ -375,7 +483,7 @@ async function closeCapturePage(button) {
 }
 
 window.addEventListener("beforeunload", (event) => {
-  if (sourcePayload && !isQueued && !closeApproved) {
+  if (sourcePayload && (!isQueued || isSendingToShelf) && !closeApproved) {
     event.preventDefault();
     event.returnValue = "";
   }
@@ -407,11 +515,11 @@ cancelButton.addEventListener("click", () => {
   }
   void closeCapturePage(cancelButton);
 });
-saveButton.addEventListener("click", () => {
+holdButton.addEventListener("click", () => {
   void saveToBrowserQueue();
 });
-testHostSaveButton.addEventListener("click", () => {
-  void savePendingQuoteToTestHost();
+shelfSaveButton.addEventListener("click", () => {
+  void saveToShelf();
 });
 errorCloseButton.addEventListener("click", () => {
   void closeCapturePage(errorCloseButton);

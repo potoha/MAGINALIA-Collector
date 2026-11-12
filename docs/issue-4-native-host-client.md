@@ -1,5 +1,7 @@
 # Issue #4: Collector Native Messaging Client (development slice)
 
+> **Superseded in part (Collector 0.2.0, 2026-11-12):** the manifest now carries the fixed public `key` and the `nativeMessaging` permission, and the client defaults to the Host name `org.maginalia.collector`. The `collector.host-profile` entry below remains only as the override used by the disposable tooling under `dev/`. The rest of this document is the historical record of the read-only slice.
+
 **Status:** Implementation for review. The architecture direction is Accepted (MAGINALIA IDE ADR 0019 / D070). Everything specific to the helper used here is **experimental** and is not a product contract.
 
 **Scope:** Collector only. Parent `main` was verified at `2cc33b302982acde59263e7d5f572cfb7552b77b` (`origin/main` and the work branch base were identical; no `STALE_BASE_COMMIT`). Work branch: `codex/collector-native-host-client`. MAGINALIA IDE and MAGINALIA Desktop were not modified.

@@ -17,12 +17,12 @@
 
       <h1 id="heading">引用を確認</h1>
       <p id="save-status" class="status" role="status" aria-live="polite">
-        引用はまだこのブラウザーに保留されていません。
+        引用はまだ保存されていません。
       </p>
 
       <div id="outbox-recovery-notice" class="notice" role="status" aria-live="polite" hidden>
         <p>ブラウザー内に保留中の引用です</p>
-        <p>表示内容は保留時の記録です。確認だけでは送信されません。保存処理が利用できる場合は、専用ボタンを明示的に押してください。ボタンが表示されない場合も、保留データはそのままです。</p>
+        <p>表示内容は保留時の記録で、ここでは編集できません。開いただけでは送信されません。本棚に保存するときは「本棚に保存」を押してください。保存できなかった場合も、保留データはそのまま残ります。</p>
       </div>
 
       <section id="capture-entry" aria-label="引用内容の確認" hidden>
@@ -92,18 +92,18 @@
           </fieldset>
 
           <fieldset>
-            <legend>現在の保管先</legend>
-            <p class="read-only">このブラウザー内の保留キュー</p>
-            <small>通常の保留操作はPrivate Shelfへ送信しません。隔離された開発用Hostがテスト専用保存を明示した場合だけ、下の専用操作を表示します。</small>
+            <legend>保存先</legend>
+            <p id="shelf-status" class="read-only" role="status" aria-live="polite">MAGINALIAとの接続を確認しています…</p>
+            <small>「本棚に保存」は、MAGINALIAで設定したPrivate Shelfに引用を保存します。保存には、このパソコンにMAGINALIA連携プログラムが必要です。保存の前に引用をこのブラウザーに保留し、保存を確認できたときだけ保留を片付けます。「このブラウザーに保留」は本棚に送らずに保留だけを行います。</small>
           </fieldset>
 
           <div class="actions">
             <button id="cancel" class="button-secondary" type="button">保存せずに閉じる</button>
-            <button id="add-to-shelf" class="button-primary" type="button">
+            <button id="hold-in-browser" class="button-secondary" type="button">
               このブラウザーに保留
             </button>
-            <button id="test-host-save" class="button-primary" type="button" hidden>
-              テストHostへ保存（同じIDで再送確認）
+            <button id="save-to-shelf" class="button-primary" type="button">
+              本棚に保存
             </button>
           </div>
         </div>

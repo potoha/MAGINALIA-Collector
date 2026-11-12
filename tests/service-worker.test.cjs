@@ -438,18 +438,20 @@ test("only the extension capture page can close its own tab", async () => {
   assert.equal(rejected.ok, false);
 });
 
-test("capture page offers local browser holding without claiming Shelf save or Host delivery", () => {
+test("capture page offers browser holding and a visible production Shelf save button", () => {
   assert.doesNotMatch(captureHtml, /<form\b/i);
   assert.match(captureHtml, /id="save-html"[^>]*disabled/);
-  assert.match(captureHtml, /id="add-to-shelf"[^>]*type="button"/);
-  assert.doesNotMatch(captureHtml, /id="add-to-shelf"[^>]*disabled/);
+  assert.match(captureHtml, /id="hold-in-browser"[^>]*type="button"/);
+  assert.doesNotMatch(captureHtml, /id="hold-in-browser"[^>]*(disabled|hidden)/);
+  assert.match(captureHtml, /id="save-to-shelf"[^>]*type="button"/);
+  assert.doesNotMatch(captureHtml, /id="save-to-shelf"[^>]*(disabled|hidden)/);
+  assert.doesNotMatch(captureHtml, /test-host-save|テストHost/);
   assert.match(captureHtml, /outbox\.js[\s\S]*capture\.js/);
   assert.match(captureHtml, /Private Shelf/);
-  assert.match(captureHtml, /通常の保留操作はPrivate Shelfへ送信しません/);
-  assert.match(captureHtml, /id="test-host-save"[^>]*hidden/);
   assert.match(captureScript, /addPending\(/);
-  assert.match(captureScript, /Host未接続のため送信処理は行っていません/);
-  assert.doesNotMatch(captureScript, /fetch\s*\(|XMLHttpRequest|storage\.(local|sync)|collector:save/i);
+  assert.match(captureScript, /collector:save-pending-quote/);
+  assert.doesNotMatch(captureScript, /Host未接続のため送信処理は行っていません|collector:test-save/);
+  assert.doesNotMatch(captureScript, /fetch\s*\(|XMLHttpRequest|storage\.(local|sync)|sendNativeMessage/i);
 });
 
 test("tolerates missing context-menu and tab APIs", async () => {
