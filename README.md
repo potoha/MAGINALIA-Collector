@@ -62,7 +62,7 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 
 ## 配布とインストール（計画）
 
-**現在、インストール可能なリリースはありません。** 配布物とガイドが整った後、次の流れを採用する予定です。
+**現在、インストール可能なリリースはありません。** 0.2.0の配布ZIPは作成できますが、公開は製品Hostとの実Chrome受入とオーナーの承認の後です。変更履歴は[CHANGELOG.md](CHANGELOG.md)、利用者向けの手順は[導入ガイド（下書き）](docs/install-guide-ja.md)にあります。
 
 - **α:** MAGINALIA公式サイトから本リポジトリ／[Releases](https://github.com/potoha/MAGINALIA-Collector/releases)へ案内。配布ZIPを展開して手動導入します。
 - **α2:** MAGINALIAのインストーラーと初期設定から、対応ブラウザの検出、導入手順、接続設定を支援します。
@@ -70,14 +70,14 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 
 ### 開発用の手動導入と検証
 
-新しい Chrome プロファイルで、リポジトリのルートフォルダ（`manifest.json` が直下にあるフォルダ）を読み込みます。
+新しい Chrome プロファイルで、リポジトリのルートフォルダ（`manifest.json` が直下にあるフォルダ）、または下記の配布ZIPを展開したフォルダを読み込みます。`manifest.json` の固定 `key` により、どちらでも拡張機能IDは `blgmoddncpknfnikdfnjelmdmphfgknf` になります。同じプロファイルに両方を同時に読み込まないでください。
 
 1. Chrome で `chrome://extensions` を開きます。
 2. `デベロッパー モード` を ON にします。
 3. `パッケージ化されていない拡張機能を読み込む` を選び、このリポジトリのルートフォルダを指定します。
-4. MAGINALIA Collector が一覧に追加されたら、ツールバーアイコンをクリックします。ブラウザー内の保留件数が表示され、Private Shelf未保存・Host未接続で送信していないことを確認します。「MAGINALIAとの接続」の「接続を確認」は、実験的なMAGINALIA連携プログラムを別途用意しない限り、未登録または未設定の案内になります。これは正常な状態です。接続を確認できた場合も、引用の送信・保存はまだ行われません。
+4. MAGINALIA Collector が一覧に追加され、IDが上記と一致することを確認します。新規インストールでは「はじめに」画面が開きます。連携プログラムが未導入なら「未登録です」と案内されます。ツールバーアイコンから保留件数と「MAGINALIAとの接続」を確認します。接続確認は引用を送信しません。
 5. 通常の HTTP(S) ページで文字列を選択して右クリックし、`本棚に追加` を選びます。確認画面に引用本文とページ情報が表示され、引用本文を編集できることを確認します。canonical URL は閲覧中の URL と別の候補として表示されます。
-6. 確認画面で本文・出典・コメントを編集し、「このブラウザーに保留」を選びます。成功表示がPrivate Shelfへの正式保存を意味しないことを確認します。
+6. 確認画面で本文・出典・コメントを編集し、「このブラウザーに保留」を選びます。成功表示が本棚への保存を意味しないことを確認します。連携プログラムと保存先が使える場合は、別の引用で「本棚に保存」を押し、「保存中…」の後に「保存しました」と表示されることを確認します。連携プログラムがない場合は、原因が表示され、保留が残ることを確認します。本棚への保存の検証には、使い捨ての本棚だけを使ってください（[dev/native-host-e2e](dev/native-host-e2e)）。
 7. ツールバー画面で保留項目が表示され、状態が「Private Shelf未保存」と区別されることを確認します。削除を一度キャンセルし、項目が残ることを確認した後、確認してから個別削除します。
 8. 保留項目を残した状態で拡張機能を再読み込みし、再度ツールバー画面を開いて項目が残ることを確認します。サービスワーカー停止後の再起動でも同じ確認をします。
 9. 選択を解除して右クリックしたときに項目がなく、`chrome://extensions` などの内部ページにも項目が出ないことを確認します。テスト用の選択文字列に実際の私的情報を使わないでください。
@@ -89,26 +89,38 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 node --check service-worker.js
 node --check popup.js
 node --check capture.js
+node --check onboarding.js
 node --check outbox.js
 node --check host-client.js
 node -e "JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))"
-node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs tests/host-client.test.cjs tests/service-worker-host.test.cjs
+node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs tests/host-client.test.cjs tests/service-worker-host.test.cjs tests/onboarding.test.cjs tests/manifest.test.cjs tests/build-dist.test.cjs tests/native-host-smoke.test.cjs
 ```
+
+`node --test tests/*.test.cjs` でも同じテスト一式を実行できます（シェルが `*` を展開する場合）。
+
+配布ZIPは依存パッケージなしで作成します。
+
+```text
+node scripts/build-dist.mjs
+```
+
+`dist/maginalia-collector-<version>.zip`（`manifest.json` がZIP直下）と `dist/SHA256SUMS` が作られます。同梱するのは `scripts/build-dist.mjs` の許可リストにあるファイルだけです。作成後にZIPの中央ディレクトリを読み直し、各ファイルの内容と一致することを確認します。テキストファイルは改行をLFにそろえ、日時を固定するため、同じコミットからは同じZIPができます。`dist/` はGitの管理対象外です。
 
 単体テストは Chrome API をモックした登録・クリック分岐の確認です。実 Chrome の拡張機能読み込みや右クリック動作の証拠とは別に扱います。read-only接続確認のsmokeは[dev/native-host-smoke](dev/native-host-smoke)、使い捨てShelfでの保存・復旧E2Eは[dev/native-host-e2e](dev/native-host-e2e)です。どちらも開発用で、配布物ではありません。
 
-宣言権限 `contextMenus` は選択時の右クリック項目に、`activeTab` と `scripting` は明示操作後のページ属性取得に、`storage` は短時間の画面受け渡しに使います。IndexedDBは拡張機能のオリジン内で使用し、追加のChrome権限は要求しません。項目は HTTP(S) ページ上の選択時だけ表示されます。権限が利用できない場合はページ属性を確認できなかったことを画面に表示し、Shelfへの保存成功を示しません。
+宣言権限 `contextMenus` は選択時の右クリック項目に、`activeTab` と `scripting` は明示操作後のページ属性取得に、`storage` は短時間の画面受け渡しに、`nativeMessaging` はMAGINALIA連携プログラムとの接続確認と、利用者が「本棚に保存」を押したときの保存に使います。IndexedDBは拡張機能のオリジン内で使用し、追加のChrome権限は要求しません。項目は HTTP(S) ページ上の選択時だけ表示されます。権限が利用できない場合はページ属性を確認できなかったことを画面に表示し、Shelfへの保存成功を示しません。
 
 ### Chromeでの手動導入（配布開始後の予定）
 
-1. Releasesから検証済みの拡張機能ZIPを取得して**展開**する。
+1. Releasesから拡張機能ZIPと `SHA256SUMS` を取得し、ハッシュを確かめてから**展開**する。
 2. アドレスバーで `chrome://extensions` を開く。
 3. **「デベロッパー モード」**をONにする。
 4. **「パッケージ化されていない拡張機能を読み込む」**をクリックする。
 5. **`manifest.json` が直下にある展開済みフォルダ**を選ぶ。
-6. Collectorの初期設定画面でMAGINALIAへ接続し、Private Shelf／Reviewerを設定する。
+6. 一覧のIDが `blgmoddncpknfnikdfnjelmdmphfgknf` であることを確かめる。
+7. 「はじめに」画面で、MAGINALIA連携プログラムと保存先の本棚の状態を確認する。保存先はMAGINALIA側で設定する。
 
-手順は、リリース時に**スクリーンショット付き・一画面一操作**の日本語ガイドとして整備します。通常のChromeに対し、デスクトップアプリから拡張機能を無断でインストールする設計は採用しません。
+一画面一操作の日本語ガイドは[docs/install-guide-ja.md](docs/install-guide-ja.md)です。現在は下書きで、スクリーンショットはオーナーとの合同確認で実画面から撮影して追加します。通常のChromeに対し、デスクトップアプリから拡張機能を無断でインストールする設計は採用しません。
 
 ## MAGINALIAとの関係
 
