@@ -420,4 +420,15 @@ hostCheckButton.addEventListener("click", () => {
   void runHostCheck();
 });
 
+const onboardingButton = document.getElementById("open-onboarding");
+onboardingButton.addEventListener("click", () => {
+  void (async () => {
+    try {
+      await chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") });
+    } catch {
+      setHostCheckStatus("準備状況の画面を開けませんでした。", "error");
+    }
+  })();
+});
+
 void loadPending();

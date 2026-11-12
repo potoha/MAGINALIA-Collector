@@ -27,7 +27,7 @@ import {
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const COPIED_FILES = [
   "host-client.js", "service-worker.js", "outbox.js", "manifest.json", "popup.html", "popup.css", "popup.js",
-  "capture.html", "capture.css", "capture.js", "icon..png"
+  "capture.html", "capture.css", "capture.js", "onboarding.html", "onboarding.css", "onboarding.js", "icon..png"
 ];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

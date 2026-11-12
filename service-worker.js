@@ -485,7 +485,25 @@ function handleExtensionMessage(message, sender, sendResponse) {
   return false;
 }
 
-chrome.runtime.onInstalled.addListener(registerSelectionMenu);
+// Opens the first-run status page once, on a fresh install only. Updates and
+// browser restarts do not reopen it; the popup links to it instead.
+async function openOnboardingOnInstall(details) {
+  if (details?.reason !== "install" || !chrome.tabs?.create) {
+    return;
+  }
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
+  } catch {
+    console.warn("Collector first-run page could not be opened.");
+  }
+}
+
+function handleInstalled(details) {
+  registerSelectionMenu();
+  void openOnboardingOnInstall(details);
+}
+
+chrome.runtime.onInstalled.addListener(handleInstalled);
 chrome.runtime.onStartup.addListener(registerSelectionMenu);
 
 if (chrome.contextMenus?.onClicked) {
