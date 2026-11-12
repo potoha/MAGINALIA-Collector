@@ -35,6 +35,9 @@ const COPIED_FILES = [
   "capture.html",
   "capture.css",
   "capture.js",
+  "onboarding.html",
+  "onboarding.css",
+  "onboarding.js",
   "icon..png"
 ];
 

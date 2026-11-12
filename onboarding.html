@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>はじめに | MAGINALIA Collector</title>
+    <link rel="stylesheet" href="onboarding.css">
+    <script src="onboarding.js" defer></script>
+  </head>
+  <body>
+    <main class="panel" aria-labelledby="heading">
+      <header class="brand">
+        <img src="icon..png" alt="" width="38" height="36">
+        <span>MAGINALIA Collector</span>
+      </header>
+
+      <h1 id="heading">MAGINALIA Collector の準備</h1>
+      <p class="lead">
+        Webページで選んだ文章を、MAGINALIAで設定したPrivate Shelf（本棚）に保存するための準備状況を確認します。この画面は確認だけを行い、引用を送信したり、保存先を変更したりしません。
+      </p>
+
+      <p id="overall-status" class="status" role="status" aria-live="polite">確認しています…</p>
+
+      <ol class="steps">
+        <li class="step">
+          <h2>1. 拡張機能</h2>
+          <p class="step-status is-ok">このブラウザーに導入されています。</p>
+        </li>
+
+        <li class="step">
+          <h2>2. MAGINALIA連携プログラム</h2>
+          <p id="host-status" class="step-status" role="status" aria-live="polite">確認しています…</p>
+          <div id="guide-host-missing" class="guidance" hidden>
+            <p>このパソコンにMAGINALIA連携プログラムが登録されていないか、この拡張機能からの接続が許可されていません。</p>
+            <p>連携プログラムのインストーラーを実行してから、「もう一度確認」を押してください。手順は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md#host-install" target="_blank" rel="noopener noreferrer">導入ガイドの「連携プログラムを入れる」</a>にあります。</p>
+          </div>
+        </li>
+
+        <li class="step">
+          <h2>3. 保存先の本棚</h2>
+          <p id="shelf-status" class="step-status" role="status" aria-live="polite">確認しています…</p>
+          <div id="guide-shelf-unconfigured" class="guidance" hidden>
+            <p>保存先の本棚がまだ設定されていないか、設定を読み取れません。保存先はMAGINALIAで設定します。この拡張機能から選ぶことはできません。</p>
+            <p>MAGINALIAを開き、「Collector の保存先を確認／解除」で保存先を確認してから、「もう一度確認」を押してください。手順は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md#shelf-setup" target="_blank" rel="noopener noreferrer">導入ガイドの「保存先を設定する」</a>にあります。</p>
+          </div>
+          <div id="guide-identity-mismatch" class="guidance" hidden>
+            <p>MAGINALIAに設定された本棚と、いま見つかった本棚の識別子が一致しません。本棚のフォルダーを移動・差し替えた場合などに起こります。安全のため、確認できるまで保存しません。</p>
+            <p>MAGINALIAの「Collector の保存先を確認／解除」で保存先を確認し直してください。手順は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md#identity-mismatch" target="_blank" rel="noopener noreferrer">導入ガイドの「識別子が一致しないとき」</a>にあります。</p>
+          </div>
+        </li>
+      </ol>
+
+      <div id="guide-other" class="guidance" hidden>
+        <p>MAGINALIA連携プログラムの状態を確認できませんでした。しばらく待ってから「もう一度確認」を押してください。続く場合は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md" target="_blank" rel="noopener noreferrer">導入ガイド</a>を確認してください。</p>
+      </div>
+
+      <div id="ready-guidance" class="guidance is-ready" hidden>
+        <p>Webページで引用したい文章を選び、右クリックして「本棚に追加」を選んでください。確認画面で「本棚に保存」を押すと保存されます。</p>
+      </div>
+
+      <div class="actions">
+        <button id="recheck" class="button-primary" type="button">もう一度確認</button>
+      </div>
+
+      <p class="note">
+        保存できないときも、引用はこのブラウザー内に保留して、後から保存できます。拡張機能のデータやブラウザープロファイルを削除すると、保留中の引用も失われる場合があります。
+      </p>
+    </main>
+  </body>
+</html>

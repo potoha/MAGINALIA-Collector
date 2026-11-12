@@ -208,6 +208,23 @@ h1 {
   margin-top: 12px;
 }
 
+.onboarding-link {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #3f4670;
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.onboarding-link:focus-visible {
+  outline: 3px solid #535a81;
+  outline-offset: 2px;
+}
+
 .host-check-summary {
   margin: 0;
   padding: 10px 12px;
