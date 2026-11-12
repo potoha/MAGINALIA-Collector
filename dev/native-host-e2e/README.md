@@ -1,6 +1,6 @@
 # Isolated Chrome → Native Host → Private Shelf E2E
 
-This development harness verifies Collector's explicit selection flow against the experimental Desktop Native Host. It is not a product contract, installer, or release artifact. The ordinary Collector manifest remains without `nativeMessaging`, and the ordinary Host descriptor remains read-only.
+This development harness verifies Collector's explicit selection flow against the experimental Desktop Native Host. It is not a product contract, installer, or release artifact. Since Collector 0.2.0 the ordinary manifest carries `nativeMessaging` and the fixed product key; this harness still writes its own throwaway `key` into the private copy, so the test extension has a different ID and talks only to the uniquely named test Host set through the `collector.host-profile` override.
 
 The test Host exposes `save_web_quote` only when **both** a test-only descriptor flag and the Host process environment gate are present. The harness sets those values in its unique launcher and registers one unique `HKCU` Native Messaging name with the exact generated extension origin. The browser sends only a request ID, quote, source URL, acquisition time, and optional bibliographic fields. Shelf paths, Shelf UUID binding, and the isolated coordination root come from the temporary MAGINALIA-side configuration.
 
@@ -37,9 +37,9 @@ In a new Chrome profile, enable Developer mode at `chrome://extensions` and load
 chrome.storage.local.set({ "collector.host-profile": { hostName: "<printed test Host name>" } })
 ```
 
-Open [example.com](https://example.com/), select one exact string visible in its English paragraph, and use the Collector context menu **本棚に追加**. The page currently has no `Example Domain` heading; record the exact selected text locally for the later verifier. The confirmation page should expose the test-only save button after it confirms the exact Host and configured disposable Shelf.
+Open [example.com](https://example.com/), select one exact string visible in its English paragraph, and use the Collector context menu **本棚に追加**. The page currently has no `Example Domain` heading; record the exact selected text locally for the later verifier. The confirmation page shows the 「本棚に保存」 button; its Shelf status line names the disposable Shelf once the test Host reports `save_web_quote`.
 
-The first test-only save is expected to return a failure after leaving a staged Book and recovery marker. Confirm the quote remains pending in the capture page, then click the same test-only button again. The retry should report `committed` followed by `already-committed`; the Outbox entry is removed only after both receipts agree. Verify the fixture has one Book and one Annotation and that both validate as Shelf v0.4.
+The first save is expected to return a failure after leaving a staged Book and recovery marker. Confirm the quote remains pending in the capture page, then click 「もう一度保存」. Each click sends exactly one `save_web_quote` with the original request ID. The retry should return `committed` and show 「保存しました」; the Outbox entry is removed only after that receipt validates. A further same-ID resend (for example from 「保留を開く」 before cleanup) must return `already-committed`. The forced second send that earlier builds performed now exists only in the unit tests. Verify the fixture has one Book and one Annotation and that both validate as Shelf v0.4.
 
 The fault injection exists only in the disposable launcher's environment. A harness created with `--shelf-root` below does not include that failpoint.
 
@@ -63,7 +63,7 @@ Create a fresh test Host environment. This does not write into the Shelf; its te
 node dev/native-host-e2e/prepare.mjs --shelf-root "<selected Private Shelf root>" --desktop-host "<Desktop test worktree>\apps\desktop\dist\main\collector-native-host.js"
 ```
 
-Load this new copy in a fresh Chrome profile and set the new printed Host name using the same `chrome.storage.local.set` command. Repeat the real selection flow once. This run sends the same request ID twice; the two receipts must be `committed` then `already-committed` (or `already-committed` twice after a retry), with identical Book, Annotation, and digest values.
+Load this new copy in a fresh Chrome profile and set the new printed Host name using the same `chrome.storage.local.set` command. Repeat the real selection flow once. One click sends the request once and must return `committed` (or `already-committed` after a retry of an earlier lost response).
 
 After saving, run the read-only verifier from the separate Desktop PR #87 test worktree (the same worktree that built the test Host). It uses the test descriptor and pre-save hash inventory, confirms every original Shelf file is unchanged, confirms exactly one new Book and Annotation and no other new Shelf files, validates the records with the Desktop Shelf v0.4 validator, compares the quote with the selected text supplied on the command line, and verifies the persisted coordination receipt:
 

@@ -1,5 +1,5 @@
 // Native Messaging is only reachable from the extension service worker or an
-// extension page, so the helper bridge lives here rather than in page scripts.
+// extension page, so the Host bridge lives here rather than in page scripts.
 if (typeof importScripts === "function") {
   try {
     importScripts("host-client.js", "outbox.js");
@@ -346,92 +346,96 @@ function unavailableHostReport(code) {
   };
 }
 
-// Reads the helper profile and asks the experimental helper for its health and
-// configured Shelf. Nothing is written and nothing is sent from the outbox, so a
-// success here must not be presented as a Shelf save.
+async function createConfiguredHostClient(api) {
+  return api.createHostClient({
+    hostName: await api.resolveHostName(chrome.storage?.local),
+    sendNativeMessage: (name, message, callback) => {
+      chrome.runtime.sendNativeMessage(name, message, callback);
+    },
+    getLastError: () => chrome.runtime.lastError
+  });
+}
+
+// Asks the Host for its health and configured Shelf. Nothing is written and
+// nothing is sent from the Outbox, so a success here is not a Shelf save.
 async function checkHostConnection() {
   const api = globalThis.CollectorHostClient;
   if (!api?.createHostClient) {
     return { ok: true, report: unavailableHostReport("native-messaging-unavailable") };
   }
 
-  const profile = await api.loadHostProfile(chrome.storage?.local);
-  const client = api.createHostClient({
-    hostName: profile?.hostName ?? "",
-    sendNativeMessage: (name, message, callback) => {
-      chrome.runtime.sendNativeMessage(name, message, callback);
-    },
-    getLastError: () => chrome.runtime.lastError
-  });
-
+  const client = await createConfiguredHostClient(api);
   return { ok: true, report: await client.checkCompatibility() };
 }
 
+const savesInProgress = new Set();
+
+// Sends one pending Outbox quote to the Host exactly once, under its original
+// request ID. The Outbox entry is deleted only after a validated committed or
+// already-committed receipt. Every failure leaves the entry pending. Nothing here
+// retries or deletes on its own; a resend is a new explicit user action with the
+// same request ID, which the Host answers idempotently.
 async function savePendingQuote(requestId) {
   const clientApi = globalThis.CollectorHostClient;
   const outboxApi = globalThis.CollectorOutbox;
   if (!clientApi?.createHostClient || !outboxApi?.create) return { ok: false, code: "native-messaging-unavailable" };
+  if (savesInProgress.has(requestId)) return { ok: false, code: "save-in-progress" };
 
-  let item;
-  const outbox = outboxApi.create();
+  savesInProgress.add(requestId);
   try {
-    item = await outbox.getPending(requestId);
-  } catch {
-    return { ok: false, code: "outbox-unavailable" };
-  }
-  if (!item || item.kind !== "quote" || !item.payload || typeof item.payload !== "object") {
-    return { ok: false, code: "pending-quote-unavailable" };
-  }
+    let item;
+    const outbox = outboxApi.create();
+    try {
+      item = await outbox.getPending(requestId);
+    } catch {
+      return { ok: false, code: "outbox-unavailable" };
+    }
+    if (!item || item.requestId !== requestId || item.kind !== "quote" || !item.payload || typeof item.payload !== "object") {
+      return { ok: false, code: "pending-quote-unavailable" };
+    }
 
-  const profile = await clientApi.loadHostProfile(chrome.storage?.local);
-  const client = clientApi.createHostClient({
-    hostName: profile?.hostName ?? "",
-    sendNativeMessage: (name, message, callback) => chrome.runtime.sendNativeMessage(name, message, callback),
-    getLastError: () => chrome.runtime.lastError
-  });
-  const payload = item.payload;
-  const quote = {
-    requestId: item.requestId,
-    quote: payload.quote,
-    url: payload.pageUrl,
-    getDate: payload.acquiredAt,
-    ...(payload.title ? { title: payload.title } : {}),
-    ...(payload.author ? { authors: [payload.author] } : {})
-  };
+    const client = await createConfiguredHostClient(clientApi);
+    const payload = item.payload;
+    const quote = {
+      requestId: item.requestId,
+      quote: payload.quote,
+      url: payload.pageUrl,
+      getDate: payload.acquiredAt,
+      ...(payload.title ? { title: payload.title } : {}),
+      ...(payload.author ? { authors: [payload.author] } : {})
+    };
 
-  let first;
-  let duplicate;
-  try {
-    first = await client.saveQuote(quote);
-    // The isolated E2E mode deliberately resends the same durable request once.
-    // The Outbox is cleared only after the common Writer confirms an idempotent receipt.
-    duplicate = await client.saveQuote(quote);
-  } catch (error) {
-    return { ok: false, code: typeof error?.code === "string" ? error.code : "host-save-failed" };
-  }
+    let saved;
+    try {
+      saved = await client.saveQuote(quote);
+    } catch (error) {
+      return { ok: false, code: typeof error?.code === "string" ? error.code : "host-save-failed" };
+    }
 
-  if (duplicate.receipt.state !== "already-committed"
-    || first.receipt.requestDigest !== duplicate.receipt.requestDigest
-    || first.receipt.bookId !== duplicate.receipt.bookId
-    || first.receipt.annotationId !== duplicate.receipt.annotationId
-    || first.receipt.annotationDigest !== duplicate.receipt.annotationDigest) {
-    return { ok: false, code: "idempotency-verification-failed" };
-  }
+    // saveQuote has already checked the receipt state, request ID, configured
+    // Shelf ID and ID/digest patterns; check the binding to this entry once more.
+    if (saved?.receipt?.requestId !== item.requestId) {
+      return { ok: false, code: "invalid-response" };
+    }
 
-  let queueCleared = false;
-  try {
-    queueCleared = (await outbox.deletePending(item.requestId)).deleted === true;
-  } catch {
-    // A persistent Host receipt is authoritative. If queue cleanup fails, retaining
-    // the duplicate request is safe and lets the user retry without data loss.
+    let queueCleared = false;
+    try {
+      queueCleared = (await outbox.deletePending(item.requestId)).deleted === true;
+    } catch {
+      queueCleared = false;
+    }
+    // A durable Host receipt is authoritative for the Shelf. If the local cleanup
+    // fails, the entry stays; a later resend returns already-committed.
+    return {
+      ok: true,
+      result: queueCleared ? "saved" : "saved-but-local-pending",
+      receipt: saved.receipt,
+      shelf: { name: saved.shelf.name },
+      queueCleared
+    };
+  } finally {
+    savesInProgress.delete(requestId);
   }
-  return {
-    ok: true,
-    receipt: first.receipt,
-    duplicateReceipt: duplicate.receipt,
-    shelf: first.shelf,
-    queueCleared
-  };
 }
 
 function handleExtensionMessage(message, sender, sendResponse) {
@@ -445,7 +449,7 @@ function handleExtensionMessage(message, sender, sendResponse) {
     return true;
   }
 
-  if (message?.type === "collector:test-save-pending-quote") {
+  if (message?.type === "collector:save-pending-quote") {
     if (!isCaptureRequestSender(sender, message.requestId)) return false;
     void savePendingQuote(message.requestId)
       .then((response) => sendResponse(response))

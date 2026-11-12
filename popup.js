@@ -22,7 +22,7 @@ const HOST_CHECK_TRANSPORT_FAILURE =
   "接続を確認できませんでした。ツールバー画面を開き直してから、もう一度お試しください。";
 
 const HOST_CHECK_COPY = {
-  "host-not-configured": "接続先がまだ設定されていません。MAGINALIA側で接続先を指定してください。",
+  "host-not-configured": "MAGINALIA連携プログラムの接続先を確認できませんでした。連携プログラムを導入し直してください。",
   "native-messaging-unavailable":
     "このブラウザーでは接続の仕組みを利用できません。ブラウザーの設定を確認してください。",
   "host-not-registered":
@@ -59,6 +59,8 @@ const HOST_CHECK_COPY = {
     "設定されたPrivate Shelfと、応答した保存先が一致しません。MAGINALIA側で保存先を選び直してください。",
   "shelf-unavailable":
     "Private Shelfを利用できませんでした。MAGINALIA側で保存先の状態を確認してください。",
+  "shelf-write-busy":
+    "本棚をほかの処理が使用中でした。少し待ってから、もう一度お試しください。",
   "unsupported-operation":
     "このMAGINALIA連携プログラムは接続確認に対応していません。連携プログラムの版を確認してください。",
   "host-error": "MAGINALIA連携プログラムの処理で問題が発生しました。もう一度お試しください。"
@@ -78,7 +80,7 @@ let hostCheckInFlight = false;
 
 heading.textContent = "保留中の引用";
 status.textContent = "このブラウザー内の保留データを読み込んでいます。";
-details.textContent = "ブラウザー内の保留はPrivate Shelfへの保存完了ではありません。Host未接続のため、送信処理は行いません。";
+details.textContent = "保留中の引用は、まだ本棚に保存されていません。「保留を開く」から内容を確認し、本棚に保存できます。保存は自動では行いません。";
 
 function formatBytes(bytes) {
   return `${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MiB`;
@@ -321,12 +323,12 @@ function renderHostCheck(response) {
   if (report.status === "compatible") {
     if (showHostCheckShelf(report.shelf)) {
       setHostCheckStatus(
-        "接続を確認できました。指定されたPrivate Shelfも確認できました。引用の送信や保存はまだ行っていません。",
+        "接続を確認できました。MAGINALIAで設定したPrivate Shelfも確認できました。この確認では引用を送信していません。",
         "ok"
       );
     } else {
       setHostCheckStatus(
-        "接続は確認できましたが、保存先のPrivate Shelfの情報を受け取れませんでした。引用の送信や保存はまだ行っていません。",
+        "接続は確認できましたが、保存先のPrivate Shelfの情報を受け取れませんでした。この確認では引用を送信していません。",
         "warn"
       );
     }

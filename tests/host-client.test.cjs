@@ -166,6 +166,8 @@ test("translates host error codes into distinct client failures", async () => {
     ["shelf_unconfigured", "shelf-not-configured"],
     ["shelf_identity_unavailable", "shelf-identity-unavailable"],
     ["shelf_unavailable", "shelf-unavailable"],
+    ["shelf_write_busy", "shelf-write-busy"],
+    ["save_failed", "host-save-failed"],
     ["configuration_unavailable", "shelf-configuration-unavailable"],
     ["host_configuration_or_origin_invalid", "host-configuration-invalid"],
     ["unsupported_operation", "unsupported-operation"],
@@ -420,6 +422,48 @@ test("loads only a bare host name from machine-local storage", async () => {
   assert.equal(await api.loadHostProfile(null), null);
   assert.equal(await api.loadHostProfile({}), null);
   assert.equal(await api.loadHostProfile({ async get() { throw new Error("denied"); } }), null);
+});
+
+test("uses the fixed product Host name unless a valid development override is stored", async () => {
+  const api = loadApi();
+  assert.equal(api.defaultHostName, "org.maginalia.collector");
+  assert.equal(await api.resolveHostName(null), "org.maginalia.collector");
+  assert.equal(await api.resolveHostName({ async get() { return {}; } }), "org.maginalia.collector");
+  assert.equal(await api.resolveHostName({ async get() { throw new Error("denied"); } }), "org.maginalia.collector");
+  assert.equal(
+    await api.resolveHostName({ async get() { return { "collector.host-profile": { hostName: "bad name" } }; } }),
+    "org.maginalia.collector"
+  );
+  assert.equal(
+    await api.resolveHostName({ async get() { return { "collector.host-profile": { hostName: HOST_NAME } }; } }),
+    HOST_NAME
+  );
+});
+
+test("gives a save request a longer bounded timeout than read-only checks", async () => {
+  const api = loadApi();
+  assert.equal(api.defaultTimeoutMs, 10000);
+  assert.equal(api.defaultSaveTimeoutMs, 30000);
+  const requestId = "00000000-0000-4000-8000-000000000006";
+  const client = api.createHostClient({
+    hostName: HOST_NAME,
+    timeoutMs: 1000,
+    saveTimeoutMs: 15,
+    sendNativeMessage: (_name, message, callback) => {
+      if (message.operation === "health") {
+        callback(healthResponse({ operations: ["health", "configured_shelf", "save_web_quote"], writesEnabled: true }));
+      } else if (message.operation === "configured_shelf") {
+        callback(shelfResponse({ writesEnabled: true }));
+      }
+      // save_web_quote never answers: the client must time out, not report success.
+    }
+  });
+  await rejectsWithCode(client.saveQuote({
+    requestId,
+    quote: "Selected test quotation",
+    url: "https://example.com/",
+    getDate: "202611031200"
+  }), "host-timeout");
 });
 
 test("ignores a host profile that carries extra fields or an invalid name", async () => {

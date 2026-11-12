@@ -1,20 +1,32 @@
 (() => {
   /**
-   * Collector-side Native Messaging client for the MAGINALIA local helper.
+   * Collector-side Native Messaging client for the MAGINALIA Collector Host.
    *
-   * The helper protocol, descriptor, host name and shelf identity expectation used
-   * by the current development helper are EXPERIMENTAL. ADR 0019 / D070 accepts the
-   * architecture direction only; registration, packaging, identity binding and the
-   * protocol itself are not approved product contracts yet. Everything specific to
-   * the current experiment is kept here so it can be replaced in one place.
+   * The Host is reached under the fixed name `org.maginalia.collector`. The Host
+   * allows exactly one extension origin, derived from the public key committed in
+   * manifest.json. A machine-local `collector.host-profile` storage entry can
+   * override the name; only the disposable development and E2E tooling under
+   * dev/ uses that override.
    *
-   * This module never writes to a Shelf, never stages a capture and never reads from
-   * the outbox. A successful response proves only that the configured helper answered.
+   * The protocol name keeps its `experimental.v1` label. Its three operations and
+   * their request and receipt shapes are fixed by the Collector and Host design
+   * memos. The client sends a quote only through save_web_quote. It sends it only
+   * after the Host reports that save_web_quote is enabled for the configured
+   * Private Shelf. It accepts only a committed or already-committed receipt bound
+   * to the same request ID and Shelf.
+   *
+   * This module never reads or changes the browser Outbox. A successful health or
+   * configured_shelf response proves only that the Host answered; it is not a save.
    */
   const EXPERIMENTAL_PROTOCOL = "maginalia.collector.experimental.v1";
   const SUPPORTED_OPERATIONS = Object.freeze(["health", "configured_shelf", "save_web_quote"]);
   const HOST_PROFILE_KEY = "collector.host-profile";
+  const DEFAULT_HOST_NAME = "org.maginalia.collector";
   const DEFAULT_TIMEOUT_MS = 10000;
+  // A save may wait for the Host's Shelf write lock and a durable multi-file write.
+  // A timeout never proves failure: the entry stays pending and a resend with the
+  // same request ID returns already-committed if the first write completed.
+  const DEFAULT_SAVE_TIMEOUT_MS = 30000;
   const MAX_TIMEOUT_MS = 60000;
   const MAX_RESPONSE_BYTES = 64 * 1024;
   const MAX_REQUEST_BYTES = 64 * 1024;
@@ -36,6 +48,7 @@
     shelf_identity_unavailable: "shelf-identity-unavailable",
     shelf_identity_mismatch: "shelf-identity-mismatch",
     shelf_unavailable: "shelf-unavailable",
+    shelf_write_busy: "shelf-write-busy",
     unsupported_operation: "unsupported-operation",
     save_failed: "host-save-failed",
     invalid_request: "host-rejected-request",
@@ -119,8 +132,9 @@
   }
 
   /**
-   * Reads the machine-local helper profile. The profile holds only the host name;
-   * no extension identity or registration detail is baked into this repository.
+   * Reads the optional machine-local Host profile override. The profile holds only
+   * a Host name. It exists for the disposable development and E2E tooling, which
+   * registers a unique test Host name; normal installs have no profile.
    */
   async function loadHostProfile(storage) {
     if (!storage || typeof storage.get !== "function") {
@@ -143,18 +157,31 @@
     return hostName ? { hostName } : null;
   }
 
+  /**
+   * Returns the Host name to contact: a valid development override when one is
+   * stored, otherwise the fixed product Host name.
+   */
+  async function resolveHostName(storage) {
+    const profile = await loadHostProfile(storage);
+    return profile?.hostName ?? DEFAULT_HOST_NAME;
+  }
+
   function createHostClient({
     hostName = "",
     sendNativeMessage = null,
     getLastError = null,
     timeoutMs = DEFAULT_TIMEOUT_MS,
+    saveTimeoutMs = DEFAULT_SAVE_TIMEOUT_MS,
     protocol = EXPERIMENTAL_PROTOCOL
   } = {}) {
     const configuredHostName = normalizeHostName(hostName);
     const boundedTimeout = normalizeTimeout(timeoutMs);
+    const boundedSaveTimeout = Number.isSafeInteger(saveTimeoutMs) && saveTimeoutMs > 0 && saveTimeoutMs <= MAX_TIMEOUT_MS
+      ? saveTimeoutMs
+      : DEFAULT_SAVE_TIMEOUT_MS;
     const expectedProtocol = normalizeProtocol(protocol);
 
-    function send(operation, fields = {}) {
+    function send(operation, fields = {}, operationTimeout = boundedTimeout) {
       if (!configuredHostName) {
         return Promise.reject(createError("host-not-configured"));
       }
@@ -184,7 +211,7 @@
           finish(value);
         };
 
-        timer = setTimeout(() => settle(reject, createError("host-timeout")), boundedTimeout);
+        timer = setTimeout(() => settle(reject, createError("host-timeout")), operationTimeout);
 
         try {
           sendNativeMessage(configuredHostName, request, (response) => {
@@ -356,7 +383,7 @@
         ...(title ? { title } : {}),
         ...(authors === undefined ? {} : { authors })
       };
-      const envelope = readEnvelope(await send("save_web_quote", fields));
+      const envelope = readEnvelope(await send("save_web_quote", fields, boundedSaveTimeout));
       if (!hasExactKeys(envelope, ["protocol", "ok", "receipt"])) throw createError("invalid-response");
       const receipt = envelope.receipt;
       const receiptKeys = ["version", "state", "requestId", "shelfId", "bookId", "annotationId", "bookReused", "annotationDigest", "requestDigest", "recordedAt"];
@@ -377,8 +404,9 @@
     }
 
     /**
-     * Verifies that this client and the installed helper agree on the experimental
-     * contract. Never throws: the caller renders the report, including failures.
+     * Verifies that this client and the installed Host agree on the protocol and
+     * that the configured Private Shelf validates. Never throws: the caller renders
+     * the report, including failures. Nothing is written.
      */
     async function checkCompatibility() {
       const checks = [];
@@ -443,10 +471,13 @@
   globalThis.CollectorHostClient = Object.freeze({
     createHostClient,
     loadHostProfile,
+    resolveHostName,
+    defaultHostName: DEFAULT_HOST_NAME,
     protocol: EXPERIMENTAL_PROTOCOL,
     operations: SUPPORTED_OPERATIONS,
     hostProfileKey: HOST_PROFILE_KEY,
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
+    defaultSaveTimeoutMs: DEFAULT_SAVE_TIMEOUT_MS,
     maxResponseBytes: MAX_RESPONSE_BYTES,
     maxRequestBytes: MAX_REQUEST_BYTES
   });
