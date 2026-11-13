@@ -26,9 +26,9 @@
   // of the save path.
   const HOST_INFO_OPERATION = "host_info";
   // Oldest Host version this extension works with. Hosts report `host.version` in
-  // host_info; 0.1.0 is the first Host that answers it. Raise only together with a
+  // host_info; 0.2.0 is the Desktop payload Host version for alpha2. Raise only together with a
   // documented incompatible change.
-  const MINIMUM_HOST_VERSION = "0.1.0";
+  const MINIMUM_HOST_VERSION = "0.2.0";
   // Same shape the Host accepts: major.minor.patch with an optional short pre-release.
   const VERSION_PATTERN = /^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}(?:-[0-9A-Za-z][0-9A-Za-z.-]{0,15})?$/;
   const VERSION_MAX_LENGTH = 32;

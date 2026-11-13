@@ -144,8 +144,8 @@ test("an extension older than the Host minimum is reported as extension-update-r
 });
 
 test("a Host older than this extension expects, or a host_info protocol mismatch, is host-update-required", async () => {
-  assert.equal(loadApi().minimumHostVersion, "0.1.0");
-  const older = createClient(infoResponder(hostInfoResponse({ version: "0.0.9" })), { extensionVersion: "0.3.0" });
+  assert.equal(loadApi().minimumHostVersion, "0.2.0");
+  const older = createClient(infoResponder(hostInfoResponse({ version: "0.1.9" })), { extensionVersion: "0.3.0" });
   const olderReport = await older.client.checkCompatibility();
   assert.equal(olderReport.status, "incompatible");
   assert.equal(olderReport.code, "host-update-required");
@@ -157,7 +157,7 @@ test("a Host older than this extension expects, or a host_info protocol mismatch
 });
 
 test("the extension check wins when both versions are outdated", async () => {
-  const { client } = createClient(infoResponder(hostInfoResponse({ version: "0.0.9", minimumExtensionVersion: "9.0.0" })), { extensionVersion: "0.3.0" });
+  const { client } = createClient(infoResponder(hostInfoResponse({ version: "0.1.9", minimumExtensionVersion: "9.0.0" })), { extensionVersion: "0.3.0" });
   assert.equal((await client.checkCompatibility()).code, "extension-update-required");
 });
 

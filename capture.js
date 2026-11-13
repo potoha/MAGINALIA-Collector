@@ -47,13 +47,13 @@ const PENDING_KEPT = "引用はこのブラウザーに保留したままです�
 // Cause-specific copy for a failed save. None of these may read as success.
 const SAVE_FAILURE_COPY = {
   "host-not-registered":
-    "MAGINALIA連携プログラムがこのパソコンに登録されていません。導入ガイドに沿って連携プログラムを導入してから、もう一度保存してください。",
+    "MAGINALIA連携プログラムがこのパソコンに登録されていません。MAGINALIAの「ファイル」→「Collector 連携を設定…」（直らないときは「Collector 連携を確認・修復…」）で設定してから、もう一度保存してください。",
   "host-not-configured":
-    "MAGINALIA連携プログラムの接続先を確認できませんでした。導入ガイドに沿って連携プログラムを導入し直してください。",
+    "MAGINALIA連携プログラムの接続先を確認できませんでした。MAGINALIAの「ファイル」→「Collector 連携を設定…」（直らないときは「Collector 連携を確認・修復…」）で設定し直してください。",
   "host-access-forbidden":
-    "MAGINALIA連携プログラムがこの拡張機能からの接続を許可していません。導入ガイドの手順で拡張機能と連携プログラムを確認してください。",
+    "MAGINALIA連携プログラムがこの拡張機能からの接続を許可していません。MAGINALIAの「ファイル」→「Collector 連携を設定…」（直らないときは「Collector 連携を確認・修復…」）で確認してください。",
   "host-configuration-invalid":
-    "MAGINALIA連携プログラムの設定を確認できませんでした。連携プログラムを導入し直してください。",
+    "MAGINALIA連携プログラムの設定を確認できませんでした。MAGINALIAの「ファイル」→「Collector 連携を設定…」（直らないときは「Collector 連携を確認・修復…」）で設定し直してください。",
   "shelf-not-configured":
     "保存先の本棚がまだ設定されていません。MAGINALIAで「Collector の保存先」を設定してから、もう一度保存してください。",
   "shelf-configuration-unavailable":

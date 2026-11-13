@@ -147,3 +147,14 @@ test("the manifest keeps the fixed key, permissions and the 0.3.0 version", () =
   assert.deepEqual([...manifest.permissions].sort(), ["activeTab", "contextMenus", "nativeMessaging", "scripting", "storage"]);
   assert.equal(typeof manifest.key, "string");
 });
+
+test("save-failure copy points to the MAGINALIA menu, not the standalone Host installer", () => {
+  const capture = fs.readFileSync(path.join(ROOT, "capture.js"), "utf8");
+  assert.doesNotMatch(capture, /導入ガイド/);
+  for (const code of ["host-not-registered", "host-not-configured", "host-access-forbidden", "host-configuration-invalid"]) {
+    const entry = capture.match(new RegExp(`"${code}":\\s*"([^"]*)"`));
+    assert.ok(entry, code);
+    assert.match(entry[1], /「ファイル」→「Collector 連携を設定…」/);
+  }
+  assert.match(capture, /PENDING_KEPT = "引用はこのブラウザーに保留したままです。"/);
+});
