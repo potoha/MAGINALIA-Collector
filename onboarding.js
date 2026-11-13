@@ -11,6 +11,8 @@ const GUIDANCE_IDS = [
   "guide-shelf-unconfigured",
   "guide-identity-mismatch",
   "guide-other",
+  "guide-extension-update",
+  "guide-host-update",
   "ready-guidance"
 ];
 
@@ -21,7 +23,7 @@ const HOST_UNAVAILABLE_COPY = {
   "native-messaging-unavailable": ["このブラウザーでは連携プログラムとの接続を利用できません。", "guide-other"],
   "host-timeout": ["時間内に応答がありませんでした。", "guide-other"],
   "host-exited": ["連携プログラムが途中で終了しました。", "guide-other"],
-  "host-configuration-invalid": ["連携プログラムの設定を確認できません。入れ直してください。", "guide-host-missing"]
+  "host-configuration-invalid": ["連携プログラムの設定を確認できません。MAGINALIAで設定を確認してください。", "guide-host-missing"]
 };
 
 const SHELF_PROBLEM_COPY = {
@@ -30,6 +32,21 @@ const SHELF_PROBLEM_COPY = {
   "shelf-identity-mismatch": ["識別子が一致しません。設定された本棚と見つかった本棚が異なります。", "guide-identity-mismatch"],
   "shelf-identity-unavailable": ["本棚の識別子を確認できません。", "guide-identity-mismatch"],
   "shelf-unavailable": ["保存先の本棚を開けません。本棚のフォルダーがあるか確認してください。", "guide-other"]
+};
+
+// Version-compatibility outcomes of the Host's host_info answer. Each has its own
+// status text and guidance block, distinct from the Shelf problems below.
+const COMPATIBILITY_COPY = {
+  "extension-update-required": {
+    host: "接続できましたが、この Collector の版が古いため使えません。",
+    shelf: "Collector の版が古いため、まだ確認できません。",
+    guidance: "guide-extension-update"
+  },
+  "host-update-required": {
+    host: "接続できましたが、Collector と MAGINALIA の版が合いません。",
+    shelf: "版が合わないため、まだ確認できません。",
+    guidance: "guide-host-update"
+  }
 };
 
 let checkInFlight = false;
@@ -87,6 +104,15 @@ function render(response) {
     setStatus(shelfStatus, "連携プログラムに接続できないため、まだ確認できません。", null);
     setStatus(overallStatus, "まだ本棚に保存できません。下の案内を確認してください。", "error");
     showGuidance(guidance);
+    return;
+  }
+
+  if (report.status === "incompatible" && Object.hasOwn(COMPATIBILITY_COPY, report.code)) {
+    const copy = COMPATIBILITY_COPY[report.code];
+    setStatus(hostStatus, copy.host, "error");
+    setStatus(shelfStatus, copy.shelf, null);
+    setStatus(overallStatus, "まだ本棚に保存できません。下の案内を確認してください。", "error");
+    showGuidance(copy.guidance);
     return;
   }
 

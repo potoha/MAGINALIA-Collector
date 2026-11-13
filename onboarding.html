@@ -32,7 +32,7 @@
           <p id="host-status" class="step-status" role="status" aria-live="polite">確認しています…</p>
           <div id="guide-host-missing" class="guidance" hidden>
             <p>このパソコンにMAGINALIA連携プログラムが登録されていないか、この拡張機能からの接続が許可されていません。</p>
-            <p>連携プログラムのインストーラーを実行してから、「もう一度確認」を押してください。手順は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md#host-install" target="_blank" rel="noopener noreferrer">導入ガイドの「連携プログラムを入れる」</a>にあります。</p>
+            <p>MAGINALIAの「ファイル」→「Collector 連携を設定…」を選び、画面の案内に従って設定してから、「もう一度確認」を押してください。すでに設定済みの場合は、「ファイル」→「Collector 連携を確認・修復…」で状態を確認できます。</p>
           </div>
         </li>
 
@@ -49,6 +49,15 @@
           </div>
         </li>
       </ol>
+
+      <div id="guide-extension-update" class="guidance" hidden>
+        <p>この Collector は、MAGINALIAの連携プログラムが対応している版より古くなっています。保留中の引用は削除されません。</p>
+        <p>MAGINALIAの「ファイル」→「Collector 連携を確認・修復…」で Collector を更新し、Chromeの拡張機能の画面で MAGINALIA Collector の［更新］（↻）を押してから、「もう一度確認」を押してください。</p>
+      </div>
+
+      <div id="guide-host-update" class="guidance" hidden>
+        <p>Collector と MAGINALIA の版が合わないため、接続できません。MAGINALIAを最新の版に更新してください。</p>
+      </div>
 
       <div id="guide-other" class="guidance" hidden>
         <p>MAGINALIA連携プログラムの状態を確認できませんでした。しばらく待ってから「もう一度確認」を押してください。続く場合は<a href="https://github.com/potoha/MAGINALIA-Collector/blob/main/docs/install-guide-ja.md" target="_blank" rel="noopener noreferrer">導入ガイド</a>を確認してください。</p>
