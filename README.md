@@ -4,7 +4,7 @@
 
 MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome / Chromium 系ブラウザ向け Manifest V3 拡張機能**です。文系の学生・研究者・書き手が、出典を失わずに資料を保存することを目指しています。
 
-> **開発状況（0.2.0、未リリース）: 選択引用の確認画面、ブラウザー内の保留キュー、連携状態の確認に加え、確認画面の「本棚に保存」からMAGINALIA連携プログラム（Native Messaging Host `org.maginalia.collector`）経由でPrivate Shelfへ保存する製品経路を実装しています。**
+> **開発状況（0.3.0、未リリース）: 選択引用の確認画面、ブラウザー内の保留キュー、連携状態の確認に加え、確認画面の「本棚に保存」からMAGINALIA連携プログラム（Native Messaging Host `org.maginalia.collector`）経由でPrivate Shelfへ保存する製品経路を実装しています。**
 > 製品Hostと組み合わせた実Chromeでの受入はまだ行っていません（NOT VERIFIED）。リリースはその受入とオーナー承認の後です。過去の隔離E2Eの記録は[dev/native-host-e2e](dev/native-host-e2e)にあります。
 
 ## 現在の基盤
@@ -60,9 +60,15 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 
 通常の利用で、Git、GitHub、ローカルフォルダパスやJSONを理解する必要はない設計です。MAGINALIAが起動していない場合も、データを黙って失わせず、未送信状態を明示します。
 
+## 版の互換性と保存データ
+
+- 接続確認（ツールバー画面の「MAGINALIAとの接続」と「はじめに」画面）は、連携プログラムが `host_info` に対応している場合だけ、Collector の版と連携プログラムの版を照合します。保存の経路では `host_info` を呼びません。
+- 版が合わないときは、Collector 側を更新する場合（MAGINALIAの「Collector 連携を確認・修復…」）と、MAGINALIA 側を更新する場合を区別して案内します。
+- ブラウザー内の保留キュー（IndexedDB）と `chrome.storage` のキーは、古い版が書いたものを新しい版が読めなければなりません。規則は[docs/storage-compatibility.md](docs/storage-compatibility.md)にあります。
+
 ## 配布とインストール（計画）
 
-**現在、インストール可能なリリースはありません。** 0.2.0の配布ZIPは作成できますが、公開は製品Hostとの実Chrome受入とオーナーの承認の後です。変更履歴は[CHANGELOG.md](CHANGELOG.md)、利用者向けの手順は[導入ガイド（下書き）](docs/install-guide-ja.md)にあります。
+**現在、インストール可能なリリースはありません。** 0.3.0の配布ZIPは作成できますが、公開は製品Hostとの実Chrome受入とオーナーの承認の後です。変更履歴は[CHANGELOG.md](CHANGELOG.md)、利用者向けの手順は[導入ガイド（下書き）](docs/install-guide-ja.md)にあります。
 
 - **α:** MAGINALIA公式サイトから本リポジトリ／[Releases](https://github.com/potoha/MAGINALIA-Collector/releases)へ案内。配布ZIPを展開して手動導入します。
 - **α2:** MAGINALIAのインストーラーと初期設定から、対応ブラウザの検出、導入手順、接続設定を支援します。
@@ -93,7 +99,7 @@ node --check onboarding.js
 node --check outbox.js
 node --check host-client.js
 node -e "JSON.parse(require('node:fs').readFileSync('manifest.json', 'utf8'))"
-node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs tests/host-client.test.cjs tests/service-worker-host.test.cjs tests/onboarding.test.cjs tests/manifest.test.cjs tests/build-dist.test.cjs tests/native-host-smoke.test.cjs
+node --test tests/service-worker.test.cjs tests/outbox.test.cjs tests/capture-outbox.test.cjs tests/host-client.test.cjs tests/host-info.test.cjs tests/service-worker-host.test.cjs tests/onboarding.test.cjs tests/storage-compat.test.cjs tests/manifest.test.cjs tests/build-dist.test.cjs tests/native-host-smoke.test.cjs
 ```
 
 `node --test tests/*.test.cjs` でも同じテスト一式を実行できます（シェルが `*` を展開する場合）。

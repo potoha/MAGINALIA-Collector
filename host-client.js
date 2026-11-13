@@ -8,7 +8,8 @@
    * override the name; only the disposable development and E2E tooling under
    * dev/ uses that override.
    *
-   * The protocol name keeps its `experimental.v1` label. Its three operations and
+   * The protocol name keeps its `experimental.v1` label. Its three operations (plus
+   * the additive, connection-check-only host_info) and
    * their request and receipt shapes are fixed by the Collector and Host design
    * memos. The client sends a quote only through save_web_quote. It sends it only
    * after the Host reports that save_web_quote is enabled for the configured
@@ -20,6 +21,17 @@
    */
   const EXPERIMENTAL_PROTOCOL = "maginalia.collector.experimental.v1";
   const SUPPORTED_OPERATIONS = Object.freeze(["health", "configured_shelf", "save_web_quote"]);
+  // `host_info` is additive to protocol v1: it is called only by the connection
+  // check, and only when the Host lists it in `health.operations`. It is never part
+  // of the save path.
+  const HOST_INFO_OPERATION = "host_info";
+  // Oldest Host version this extension works with. Hosts report `host.version` in
+  // host_info; 0.1.0 is the first Host that answers it. Raise only together with a
+  // documented incompatible change.
+  const MINIMUM_HOST_VERSION = "0.1.0";
+  // Same shape the Host accepts: major.minor.patch with an optional short pre-release.
+  const VERSION_PATTERN = /^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}(?:-[0-9A-Za-z][0-9A-Za-z.-]{0,15})?$/;
+  const VERSION_MAX_LENGTH = 32;
   const HOST_PROFILE_KEY = "collector.host-profile";
   const DEFAULT_HOST_NAME = "org.maginalia.collector";
   const DEFAULT_TIMEOUT_MS = 10000;
@@ -117,6 +129,30 @@
     return "host-unreachable";
   }
 
+  function isVersionString(value) {
+    return typeof value === "string" && value.length <= VERSION_MAX_LENGTH && VERSION_PATTERN.test(value);
+  }
+
+  // Orders two version strings accepted by isVersionString. A pre-release sorts
+  // before the same numeric version without one. Returns -1, 0 or 1.
+  function compareVersions(left, right) {
+    const parse = (value) => {
+      const [numbers, ...rest] = value.split("-");
+      return { numbers: numbers.split(".").map(Number), pre: rest.length > 0 ? rest.join("-") : null };
+    };
+    const a = parse(left);
+    const b = parse(right);
+    for (let index = 0; index < 3; index += 1) {
+      if (a.numbers[index] !== b.numbers[index]) {
+        return a.numbers[index] < b.numbers[index] ? -1 : 1;
+      }
+    }
+    if (a.pre === b.pre) return 0;
+    if (a.pre === null) return 1;
+    if (b.pre === null) return -1;
+    return a.pre < b.pre ? -1 : 1;
+  }
+
   function normalizeHostName(value) {
     return typeof value === "string" && HOST_NAME_PATTERN.test(value) ? value : "";
   }
@@ -172,9 +208,11 @@
     getLastError = null,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     saveTimeoutMs = DEFAULT_SAVE_TIMEOUT_MS,
-    protocol = EXPERIMENTAL_PROTOCOL
+    protocol = EXPERIMENTAL_PROTOCOL,
+    extensionVersion = ""
   } = {}) {
     const configuredHostName = normalizeHostName(hostName);
+    const configuredExtensionVersion = isVersionString(extensionVersion) ? extensionVersion : "";
     const boundedTimeout = normalizeTimeout(timeoutMs);
     const boundedSaveTimeout = Number.isSafeInteger(saveTimeoutMs) && saveTimeoutMs > 0 && saveTimeoutMs <= MAX_TIMEOUT_MS
       ? saveTimeoutMs
@@ -311,6 +349,34 @@
       });
     }
 
+    /**
+     * Asks the Host for its version and the oldest extension version it supports.
+     * Strict like the other operations. A response under a different protocol
+     * identifier means the Host is not the one this extension expects, so it is
+     * reported as host-update-required. Nothing is written by this call on the
+     * extension side; the Host may record that the extension made contact.
+     */
+    async function hostInfo() {
+      if (!configuredExtensionVersion) {
+        throw createError("invalid-request");
+      }
+      const response = await send(HOST_INFO_OPERATION, { extensionVersion: configuredExtensionVersion });
+      if (isPlainRecord(response) && response.ok === true && typeof response.protocol === "string"
+        && response.protocol !== expectedProtocol) {
+        throw createError("host-update-required");
+      }
+      const envelope = readEnvelope(response);
+      if (!hasExactKeys(envelope, ["protocol", "ok", "host"])) {
+        throw createError("invalid-response");
+      }
+      const host = envelope.host;
+      if (!hasExactKeys(host, ["version", "minimumExtensionVersion"])
+        || !isVersionString(host.version) || !isVersionString(host.minimumExtensionVersion)) {
+        throw createError("invalid-response");
+      }
+      return Object.freeze({ version: host.version, minimumExtensionVersion: host.minimumExtensionVersion });
+    }
+
     async function configuredShelf() {
       const envelope = readEnvelope(await send("configured_shelf"));
       if (!hasExactKeys(envelope, ["protocol", "ok", "shelf"])) {
@@ -438,6 +504,34 @@
       addCheck("health", "pass");
       addCheck("protocol", "pass");
 
+      // An older Host that does not list host_info is skipped silently: the existing
+      // behaviour stays. Without a valid own version nothing can be sent either.
+      if (hostStatus.operations.includes(HOST_INFO_OPERATION) && configuredExtensionVersion) {
+        let info;
+        try {
+          info = await hostInfo();
+        } catch (error) {
+          const code = errorCode(error);
+          addCheck("host-info", "fail", code);
+          const report = createReport("incompatible", code);
+          report.host = hostStatus;
+          return report;
+        }
+        let incompatibility = "";
+        if (compareVersions(configuredExtensionVersion, info.minimumExtensionVersion) < 0) {
+          incompatibility = "extension-update-required";
+        } else if (compareVersions(info.version, MINIMUM_HOST_VERSION) < 0) {
+          incompatibility = "host-update-required";
+        }
+        if (incompatibility) {
+          addCheck("host-info", "fail", incompatibility);
+          const report = createReport("incompatible", incompatibility);
+          report.host = hostStatus;
+          return report;
+        }
+        addCheck("host-info", "pass");
+      }
+
       if (!hostStatus.operations.includes("configured_shelf")) {
         addCheck("configured-shelf-operation", "fail", "unsupported-operation");
         const report = createReport("incompatible", "unsupported-operation");
@@ -465,7 +559,7 @@
       return report;
     }
 
-    return Object.freeze({ health, configuredShelf, saveQuote, checkCompatibility, hostName: configuredHostName });
+    return Object.freeze({ health, hostInfo, configuredShelf, saveQuote, checkCompatibility, hostName: configuredHostName });
   }
 
   globalThis.CollectorHostClient = Object.freeze({
@@ -475,6 +569,10 @@
     defaultHostName: DEFAULT_HOST_NAME,
     protocol: EXPERIMENTAL_PROTOCOL,
     operations: SUPPORTED_OPERATIONS,
+    hostInfoOperation: HOST_INFO_OPERATION,
+    minimumHostVersion: MINIMUM_HOST_VERSION,
+    isVersionString,
+    compareVersions,
     hostProfileKey: HOST_PROFILE_KEY,
     defaultTimeoutMs: DEFAULT_TIMEOUT_MS,
     defaultSaveTimeoutMs: DEFAULT_SAVE_TIMEOUT_MS,

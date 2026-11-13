@@ -32,7 +32,8 @@ function createHarness({
   pendingItem = null,
   deleteError = false,
   deleteResult = null,
-  deferSave = false
+  deferSave = false,
+  extensionVersion = "0.3.0"
 } = {}) {
   const listeners = {};
   const requests = [];
@@ -42,6 +43,7 @@ function createHarness({
   const chrome = {
     runtime: {
       id: RUNTIME_ID,
+      getManifest: () => ({ version: extensionVersion }),
       lastError,
       getURL: (resource) => `chrome-extension://${RUNTIME_ID}/` + resource,
       onInstalled: { addListener() {} },
@@ -505,4 +507,34 @@ test("the retired test-only save message is no longer handled", async () => {
   assert.equal(response.code, "rejected");
   assert.deepEqual(harness.requests, []);
   assert.equal(harness.deleted, false);
+});
+
+test("the host check sends the manifest version in host_info and reports an outdated extension", async () => {
+  const harness = createHarness({
+    extensionVersion: "0.3.0",
+    responses: {
+      health: { ...healthyResponse, operations: ["health", "configured_shelf", "host_info"] },
+      host_info: { protocol: PROTOCOL, ok: true, host: { version: "0.2.0", minimumExtensionVersion: "0.4.0" } },
+      configured_shelf: shelfResponse
+    }
+  });
+
+  const response = await sendHostCheck(harness);
+
+  assert.equal(response.report.status, "incompatible");
+  assert.equal(response.report.code, "extension-update-required");
+  const infoRequest = harness.requests.find((request) => request.message.operation === "host_info");
+  assert.deepEqual({ ...infoRequest.message }, { protocol: PROTOCOL, operation: "host_info", extensionVersion: "0.3.0" });
+});
+
+test("the save path never sends host_info", async () => {
+  const requestId = "00000000-0000-4000-8000-000000000007";
+  const responses = writeModeResponses(requestId);
+  responses.health = { ...responses.health, operations: [...responses.health.operations, "host_info"] };
+  const harness = createHarness({ pendingItem: pendingQuote(requestId), responses });
+
+  await sendPendingQuote(harness, requestId);
+
+  assert.equal(harness.requests.some((request) => request.message.operation === "host_info"), false);
+  assert.equal(harness.saveRequests().length, 1);
 });

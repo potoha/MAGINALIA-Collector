@@ -352,8 +352,17 @@ async function createConfiguredHostClient(api) {
     sendNativeMessage: (name, message, callback) => {
       chrome.runtime.sendNativeMessage(name, message, callback);
     },
-    getLastError: () => chrome.runtime.lastError
+    getLastError: () => chrome.runtime.lastError,
+    extensionVersion: ownExtensionVersion()
   });
+}
+
+function ownExtensionVersion() {
+  try {
+    return chrome.runtime.getManifest?.().version ?? "";
+  } catch {
+    return "";
+  }
 }
 
 // Asks the Host for its health and configured Shelf. Nothing is written and

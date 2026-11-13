@@ -11,7 +11,15 @@ const serviceWorkerScript = fs.readFileSync(path.join(ROOT, "service-worker.js")
 const popupScript = fs.readFileSync(path.join(ROOT, "popup.js"), "utf8");
 const popupHtml = fs.readFileSync(path.join(ROOT, "popup.html"), "utf8");
 const SHELF_ID = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
-const GUIDANCE_IDS = ["guide-host-missing", "guide-shelf-unconfigured", "guide-identity-mismatch", "guide-other", "ready-guidance"];
+const GUIDANCE_IDS = [
+  "guide-host-missing",
+  "guide-shelf-unconfigured",
+  "guide-identity-mismatch",
+  "guide-other",
+  "guide-extension-update",
+  "guide-host-update",
+  "ready-guidance"
+];
 
 class MockElement {
   constructor(id) {
@@ -172,10 +180,107 @@ test("もう一度確認 runs the read-only check again and updates the result",
 test("the first-run page offers no Shelf list, picker or switching and sends no quote", () => {
   assert.doesNotMatch(onboardingHtml, /<select\b|type="radio"|<form\b|<input\b/i);
   assert.doesNotMatch(onboardingScript, /save-pending-quote|sendNativeMessage|CollectorOutbox|storage\.(local|sync|session)/);
-  for (const anchor of ["#host-install", "#shelf-setup", "#identity-mismatch"]) {
+  for (const anchor of ["#shelf-setup", "#identity-mismatch"]) {
     assert.match(onboardingHtml, new RegExp(`docs/install-guide-ja\\.md${anchor}`));
   }
   assert.match(onboardingHtml, /target="_blank" rel="noopener noreferrer"/);
+});
+
+test("the Desktop-bundled path: no standalone Host installer link, setup is done from MAGINALIA", () => {
+  assert.doesNotMatch(onboardingHtml, /#host-install|インストーラー/);
+  assert.match(onboardingHtml, /「ファイル」→「Collector 連携を設定…」/);
+  assert.match(onboardingHtml, /「Collector 連携を確認・修復…」/);
+});
+
+test("an outdated extension shows its own state and guidance, never ready", async () => {
+  const { elements } = runOnboarding(report("incompatible", { code: "extension-update-required" }));
+  await flushUi();
+
+  assert.match(elements.get("host-status").textContent, /Collector の版が古い/);
+  assert.match(elements.get("overall-status").textContent, /まだ本棚に保存できません/);
+  assert.doesNotMatch(elements.get("overall-status").textContent, /準備ができました/);
+  assert.deepEqual(visibleGuidance(elements), ["guide-extension-update"]);
+  assert.match(onboardingHtml, /id="guide-extension-update"[\s\S]*「Collector 連携を確認・修復…」/);
+  assert.doesNotMatch(allText(elements), /successfully|please/i);
+});
+
+test("an outdated Host or protocol mismatch tells the user to update MAGINALIA", async () => {
+  const { elements } = runOnboarding(report("incompatible", { code: "host-update-required" }));
+  await flushUi();
+
+  assert.match(elements.get("host-status").textContent, /版が合いません/);
+  assert.deepEqual(visibleGuidance(elements), ["guide-host-update"]);
+  assert.match(onboardingHtml, /id="guide-host-update"[\s\S]*MAGINALIAを最新の版に更新してください/);
+  assert.doesNotMatch(elements.get("overall-status").textContent, /準備ができました/);
+});
+
+test("the two compatibility states are distinct from each other and from Shelf problems", async () => {
+  const states = [];
+  for (const code of ["extension-update-required", "host-update-required", "shelf-not-configured"]) {
+    const { elements } = runOnboarding(report("incompatible", { code }));
+    await flushUi();
+    states.push(`${elements.get("host-status").textContent}|${visibleGuidance(elements).join()}`);
+  }
+  assert.equal(new Set(states).size, 3);
+});
+
+test("a clear recheck after an update removes the compatibility guidance", async () => {
+  const { elements } = runOnboarding([report("incompatible", { code: "extension-update-required" }), writableReport()]);
+  await flushUi();
+  elements.get("recheck").listeners.get("click")();
+  await flushUi();
+  assert.deepEqual(visibleGuidance(elements), ["ready-guidance"]);
+});
+
+async function runPopupCheck(response) {
+  const { document, elements } = createDocument();
+  const context = vm.createContext({
+    document,
+    console,
+    chrome: {
+      runtime: {
+        lastError: null,
+        getURL: (resource) => "chrome-extension://test/" + resource,
+        sendMessage(_message, callback) { callback(response); }
+      },
+      tabs: { async create() {} },
+      permissions: { contains(_permissions, callback) { callback(true); } }
+    },
+    window: { confirm() { return false; } },
+    CollectorOutbox: { create: () => ({ async listPending() { return { items: [], itemCount: 0, totalBytes: 0 }; } }) },
+    URLSearchParams,
+    Intl
+  });
+  vm.runInContext(popupScript, context);
+  await flushUi();
+  elements.get("host-check-button").listeners.get("click")();
+  await flushUi();
+  return elements;
+}
+
+test("the popup shows a dedicated message for each compatibility outcome and no failure list", async () => {
+  const extension = await runPopupCheck(report("incompatible", { code: "extension-update-required" }));
+  assert.match(extension.get("host-check-status").textContent, /Collector の版が古い.*「ファイル」→「Collector 連携を確認・修復…」/);
+  assert.equal(extension.get("host-check-status").className, "host-check-summary is-error");
+  assert.equal(extension.get("host-check-failure-list").children.length, 0);
+
+  const host = await runPopupCheck(report("incompatible", { code: "host-update-required" }));
+  assert.match(host.get("host-check-status").textContent, /版が合わない.*MAGINALIAを最新の版に更新してください/);
+  assert.equal(host.get("host-check-failure-list").children.length, 0);
+  assert.notEqual(extension.get("host-check-status").textContent, host.get("host-check-status").textContent);
+});
+
+test("the popup still lists failed checks for other incompatible outcomes", async () => {
+  const elements = await runPopupCheck(report("incompatible", {
+    code: "shelf-identity-mismatch",
+    checks: [{ id: "configured-shelf", status: "fail", code: "shelf-identity-mismatch" }]
+  }));
+  assert.equal(elements.get("host-check-failure-list").children.length, 1);
+});
+
+test("the popup and first-run copy avoid the standalone Host installer wording", () => {
+  assert.doesNotMatch(popupScript, /連携プログラムを導入/);
+  assert.doesNotMatch(onboardingScript, /入れ直して/);
 });
 
 function createServiceWorker() {

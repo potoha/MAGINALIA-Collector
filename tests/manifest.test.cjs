@@ -28,9 +28,9 @@ test("the manifest key is a 2048-bit RSA public key in SPKI DER form", () => {
   assert.equal(publicKey.asymmetricKeyDetails.modulusLength, 2048);
 });
 
-test("the manifest requests Native Messaging and describes the 0.2.0 save path", () => {
+test("the manifest requests Native Messaging and describes the save path", () => {
   assert.equal(manifest.manifest_version, 3);
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.3.0");
   assert.deepEqual(
     [...manifest.permissions].sort(),
     ["activeTab", "contextMenus", "nativeMessaging", "scripting", "storage"]

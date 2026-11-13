@@ -22,11 +22,11 @@ const HOST_CHECK_TRANSPORT_FAILURE =
   "接続を確認できませんでした。ツールバー画面を開き直してから、もう一度お試しください。";
 
 const HOST_CHECK_COPY = {
-  "host-not-configured": "MAGINALIA連携プログラムの接続先を確認できませんでした。連携プログラムを導入し直してください。",
+  "host-not-configured": "MAGINALIA連携プログラムの接続先を確認できませんでした。MAGINALIAの「ファイル」→「Collector 連携を確認・修復…」で確認してください。",
   "native-messaging-unavailable":
     "このブラウザーでは接続の仕組みを利用できません。ブラウザーの設定を確認してください。",
   "host-not-registered":
-    "MAGINALIA連携プログラムがこのブラウザーに登録されていません。連携プログラムを導入してから確認してください。",
+    "MAGINALIA連携プログラムがこのブラウザーに登録されていません。MAGINALIAの「ファイル」→「Collector 連携を設定…」で設定してから確認してください。",
   "host-access-forbidden":
     "MAGINALIA連携プログラムへの接続が許可されませんでした。MAGINALIA側の許可の設定を確認してください。",
   "host-exited":
@@ -63,14 +63,22 @@ const HOST_CHECK_COPY = {
     "本棚をほかの処理が使用中でした。少し待ってから、もう一度お試しください。",
   "unsupported-operation":
     "このMAGINALIA連携プログラムは接続確認に対応していません。連携プログラムの版を確認してください。",
-  "host-error": "MAGINALIA連携プログラムの処理で問題が発生しました。もう一度お試しください。"
+  "host-error": "MAGINALIA連携プログラムの処理で問題が発生しました。もう一度お試しください。",
+  "extension-update-required":
+    "この Collector の版が古いため使えません。MAGINALIAの「ファイル」→「Collector 連携を確認・修復…」で Collector を更新し、Chromeの拡張機能の画面で［更新］（↻）を押してください。保留中の引用は削除されません。",
+  "host-update-required":
+    "Collector と MAGINALIA の版が合わないため、接続できません。MAGINALIAを最新の版に更新してください。"
 };
+
+// 版の不一致は、通らなかった確認項目の一覧ではなく、この文言だけを示す。
+const HOST_CHECK_COMPATIBILITY_CODES = new Set(["extension-update-required", "host-update-required"]);
 
 // 応答が互換性のない版だったときは、通らなかった確認項目をこの文言で示す。
 const HOST_CHECK_FAILURE_COPY = {
   ...HOST_CHECK_COPY,
   "host-configured": "接続先が設定されていません。MAGINALIA側で接続先を指定してください。",
   health: "MAGINALIA連携プログラムから正常な応答を確認できませんでした。",
+  "host-info": "MAGINALIA連携プログラムの版を確認できませんでした。",
   "configured-shelf-operation": "このMAGINALIA連携プログラムは保存先の確認に対応していません。",
   "configured-shelf": "指定されたPrivate Shelfを開けませんでした。",
   "shelf-identity": "指定されたPrivate Shelfを照合できませんでした。"
@@ -332,6 +340,11 @@ function renderHostCheck(response) {
         "warn"
       );
     }
+    return;
+  }
+
+  if (report.status === "incompatible" && HOST_CHECK_COMPATIBILITY_CODES.has(report.code)) {
+    setHostCheckStatus(hostCheckCopyForCode(report.code), "error");
     return;
   }
 
