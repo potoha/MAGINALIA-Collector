@@ -136,7 +136,7 @@ Collector は**収集インターフェース**で、ShelfやReviewerのデー�
 ## License
 
 - MAGINALIA Collector 0.2.0 以降: [GNU Affero General Public License v3.0 or later](LICENSE)（AGPL-3.0-or-later）
-- 著作権者は、AGPLの条件では利用できない組織向けに、別途商用ライセンスを提供することがあります。お問い合わせ: <連絡先メール>
+- 著作権者は、AGPLの条件では利用できない組織向けに、別途商用ライセンスを提供することがあります。お問い合わせ: [GitHub Issues](https://github.com/potoha/MAGINALIA-Collector/issues)
 - 「MAGINALIA」の名称とロゴの扱いは [TRADEMARKS.md](TRADEMARKS.md) を参照してください。
 - 貢献を希望する方は [CONTRIBUTING.md](CONTRIBUTING.md) を読んでください。
 
