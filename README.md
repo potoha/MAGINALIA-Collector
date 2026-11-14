@@ -132,3 +132,18 @@ Collector は**収集インターフェース**で、ShelfやReviewerのデー�
 このリポジトリのREADMEは製品案内であり、上記の要件定義やAccepted ADRを上書きしません。機能実装、公開ライセンス、配布開始日、ブラウザ対応範囲などの未確定事項を既成事実として扱わないでください。
 
 **企画・開発:** beyond the Word / MAGINALIA
+
+## License
+
+- MAGINALIA Collector 0.2.0 以降: [GNU Affero General Public License v3.0 or later](LICENSE)（AGPL-3.0-or-later）
+- 著作権者は、AGPLの条件では利用できない組織向けに、別途商用ライセンスを提供することがあります。お問い合わせ: <連絡先メール>
+- 「MAGINALIA」の名称とロゴの扱いは [TRADEMARKS.md](TRADEMARKS.md) を参照してください。
+- 貢献を希望する方は [CONTRIBUTING.md](CONTRIBUTING.md) を読んでください。
+
+### 要点（法的な保証ではありません）
+
+- 自由に使用・改変・再配布できます。
+- 改変版を配布する場合、またはネットワーク経由でサービスとして提供する場合は、その改変版のソースコードを同じAGPLの条件で利用者に提供する必要があります。
+- フォークは歓迎します。改善はぜひ upstream に送ってください。
+
+Copyright (C) 2026 MADA 5sounds (go-on) / beyond the Word.
