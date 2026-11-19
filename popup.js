@@ -65,7 +65,7 @@ const HOST_CHECK_COPY = {
     "このMAGINALIA連携プログラムは接続確認に対応していません。連携プログラムの版を確認してください。",
   "host-error": "MAGINALIA連携プログラムの処理で問題が発生しました。もう一度お試しください。",
   "extension-update-required":
-    "この Collector の版が古いため使えません。MAGINALIAの「ファイル」→「Collector 連携を確認・修復…」で Collector を更新し、Chromeの拡張機能の画面で［更新］（↻）を押してください。保留中の引用は削除されません。",
+    "この Collector の版が古いため使えません。MAGINALIAの「ファイル」→「Collector 連携を確認・修復…」で Collector を更新し、ブラウザーの拡張機能の画面で MAGINALIA Collector の再読み込み（↻）を押してください。保留中の引用は削除されません。",
   "host-update-required":
     "Collector と MAGINALIA の版が合わないため、接続できません。MAGINALIAを最新の版に更新してください。"
 };

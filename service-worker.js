@@ -329,7 +329,13 @@ function isExtensionPageSender(sender) {
   try {
     const senderUrl = new URL(sender.url);
     const extensionUrl = new URL(chrome.runtime.getURL(""));
-    return senderUrl.protocol === "chrome-extension:" && senderUrl.origin === extensionUrl.origin;
+    // Compare against this runtime's own extension URL (scheme differs by browser). Host is checked
+    // explicitly because non-special schemes can report an opaque "null" origin outside Chromium.
+    return (
+      senderUrl.protocol === extensionUrl.protocol &&
+      senderUrl.host === extensionUrl.host &&
+      senderUrl.origin === extensionUrl.origin
+    );
   } catch {
     return false;
   }

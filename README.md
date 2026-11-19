@@ -2,7 +2,7 @@
 
 **Webで見つけた文章を、研究の本棚へ。**
 
-MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome / Chromium 系ブラウザ向け Manifest V3 拡張機能**です。文系の学生・研究者・書き手が、出典を失わずに資料を保存することを目指しています。
+MAGINALIA Collector は、Webページ上の引用を集めるための **Google Chrome / Microsoft Edge 向けの Manifest V3 拡張機能**です（Vivaldi を含むその他の Chromium 系ブラウザーは未検証です）。文系の学生・研究者・書き手が、出典を失わずに資料を保存することを目指しています。
 
 > **開発状況（0.3.0、未リリース）: 選択引用の確認画面、ブラウザー内の保留キュー、連携状態の確認に加え、確認画面の「本棚に保存」からMAGINALIA連携プログラム（Native Messaging Host `org.maginalia.collector`）経由でPrivate Shelfへ保存する製品経路を実装しています。**
 > 製品Hostと組み合わせた実Chromeでの受入はまだ行っていません（NOT VERIFIED）。リリースはその受入とオーナー承認の後です。過去の隔離E2Eの記録は[dev/native-host-e2e](dev/native-host-e2e)にあります。
@@ -17,7 +17,7 @@ MAGINALIA Collector は、Webページ上の引用を集めるための **Chrome
 - ツールバー画面の「MAGINALIAとの接続」は、稼働状態とMAGINALIAが設定した単一Private Shelfの表示名・識別IDを確認するread-only操作です。`manifest.json`は固定の公開鍵（`key`）で拡張機能IDを `blgmoddncpknfnikdfnjelmdmphfgknf` に固定し、`nativeMessaging`権限を持ちます。Host名の既定は`org.maginalia.collector`です。`chrome.storage.local`の`collector.host-profile`は、[dev/](dev)の使い捨て開発・E2E用ツールだけが使う上書き設定です。Collectorは保存先の本棚を列挙・選択・切替しません。保存先はMAGINALIA側で設定します。
 - 新規インストール時に初回案内画面（`onboarding.html`）を一度だけ開き、連携プログラムの接続状態、MAGINALIAで設定した本棚の表示名、未登録・未設定・識別子不一致のときの案内を表示します。ツールバー画面からも開けます。この画面は確認だけを行い、送信や保存先の変更はしません。
 - 保留前の確認画面を閉じる操作では、未保留の引用・編集内容を破棄する確認を表示します。ブラウザー離脱時にも標準の離脱確認を要求します。保留する前の引用はセッション内の一時データなので、ブラウザーや拡張機能の異常終了時には失われる場合があります。
-- IndexedDBはChromeの拡張機能データとして現在のブラウザープロファイル内に保存され、同期されません。拡張機能の削除、プロファイルの削除、ブラウザーのサイトデータ消去で保留内容を失う場合があります。現状、キューのエクスポート/バックアップ機能はありません。
+- IndexedDBはChromeの拡張機能データとして現在のブラウザープロファイル内に保存され、同期されません。拡張機能の削除、プロファイルの削除、ブラウザーのサイトデータ消去で保留内容を失う場合があります。現状、キューのエクスポート/バックアップ機能はありません。複数のブラウザー（またはプロファイル）にCollectorを入れると、保留キュー（Outbox）はそれぞれ別になり、互いに見えません。
 - 宣言権限は `contextMenus`、`activeTab`、`scripting`、`storage` です。全サイトのホスト権限や `tabs` 権限は要求しません。ページ属性取得は、利用者がコンテキストメニューを実行したタブに限ります。
 
 以下は**今後の連携・キャプチャー目標（未実装）**です。

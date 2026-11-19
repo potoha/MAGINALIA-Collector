@@ -33,7 +33,8 @@ function createHarness({
   deleteError = false,
   deleteResult = null,
   deferSave = false,
-  extensionVersion = "0.3.0"
+  extensionVersion = "0.3.0",
+  urlScheme = "chrome-extension"
 } = {}) {
   const listeners = {};
   const requests = [];
@@ -45,7 +46,7 @@ function createHarness({
       id: RUNTIME_ID,
       getManifest: () => ({ version: extensionVersion }),
       lastError,
-      getURL: (resource) => `chrome-extension://${RUNTIME_ID}/` + resource,
+      getURL: (resource) => `${urlScheme}://${RUNTIME_ID}/` + resource,
       onInstalled: { addListener() {} },
       onStartup: { addListener() {} },
       onMessage: { addListener: (listener) => { listeners.onMessage = listener; } },
@@ -202,6 +203,31 @@ test("another extension origin cannot reach the helper", async () => {
   assert.equal(response.ok, false);
   assert.equal(response.code, "rejected");
   assert.deepEqual(harness.requests, []);
+});
+
+test("sender check follows the runtime's own extension URL scheme, not a constant", async () => {
+  const harness = createHarness({
+    urlScheme: "extension",
+    responses: { health: healthyResponse, configured_shelf: shelfResponse }
+  });
+
+  const own = await sendHostCheck(harness, { id: RUNTIME_ID, url: `extension://${RUNTIME_ID}/popup.html` });
+  assert.equal(own.ok, true);
+
+  const otherScheme = await sendHostCheck(harness, { id: RUNTIME_ID, url: `chrome-extension://${RUNTIME_ID}/popup.html` });
+  assert.equal(otherScheme.ok, false);
+  assert.equal(otherScheme.code, "rejected");
+
+  const otherExtension = await sendHostCheck(harness, {
+    id: "ponmlkjihgfedcbaponmlkjihgfedcba",
+    url: "extension://ponmlkjihgfedcbaponmlkjihgfedcba/popup.html"
+  });
+  assert.equal(otherExtension.ok, false);
+  assert.equal(otherExtension.code, "rejected");
+
+  const web = await sendHostCheck(harness, { id: RUNTIME_ID, url: "https://example.com/article" });
+  assert.equal(web.ok, false);
+  assert.equal(web.code, "rejected");
 });
 
 test("contacts the fixed product Host name when no development override is stored", async () => {
