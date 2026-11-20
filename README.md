@@ -41,7 +41,7 @@ MAGINALIA の「ファイル」→「**Collector 連携を設定…**」が、�
 
 - 拡張機能 ID は固定です: `blgmoddncpknfnikdfnjelmdmphfgknf`（`manifest.json` の固定 `key` による）。
 - 配布ファイル: [Releases](https://github.com/potoha/MAGINALIA-Collector/releases) の `maginalia-collector-0.3.0.zip`。同じ場所に SHA-256 を載せています。展開前に確かめてください。
-- 一画面一操作の手順書: [docs/install-guide-ja.md](docs/install-guide-ja.md)（書き直しを予定しています）。
+- 一画面一操作の手順書: [docs/install-guide-ja.md](docs/install-guide-ja.md)（下書き。対応する版の MAGINALIA Desktop が公開されていない旨も書いています）。
 
 ### 対応ブラウザー
 
@@ -81,7 +81,7 @@ Collector は**収集のための窓口**で、本棚のデータの正本は持
 
 - キャプチャー: 選択できない文章（画像など）を、画面の四角形で撮影し、MAGINALIA Reviewer の確認待ちキューへ送る機能。画像内の文字は、Reviewer の OCR と人の確認・承認を経て、はじめて正式な引用になります。Collector が、未確認の OCR 結果を確定引用として保存することはありません。
 - HTML の保存（任意機能）、初期設定・詳細設定の画面。
-- 導入ガイドの書き直しと、拡張機能の自動再読み込み。
+- 拡張機能の自動再読み込み。
 
 この README は、要件定義や承認済みの設計判断を上書きしません。
 
