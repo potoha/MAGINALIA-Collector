@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "MAGINALIA Collector",
-  "version": "0.1.0",
-  "description": "選択した引用と出典を確認するための拡張機能です。保存連携は未実装です。",
+  "version": "0.3.0",
+  "description": "Webページで選択した引用と出典を確認し、MAGINALIAで設定したPrivate Shelfに保存します。保存にはMAGINALIA連携プログラムが必要です。",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyp0ZIrFbABW+I8H80k14vICG1gWIgUUlVxxfQ7trxjGvg728zPYQ7o1ZE01uwGzaKGRn3J5cyNwlcjrYJHENHRdDwD7H3opT4rUMXdUJVSsQB4FSjsq0KBNyxv4QuTjeEY7tuEmUKfAdcKD7H8poGmcTdpPcZR+ycmcAHnThsj3EcLKxreKeYXRPI3Is1TeJhsU5aFH8SElFO8bt/+ggPEDvk5SDpPUJa+3tW2Jz0MZyoBph5jf4G8EXQ/ZHD2hcrxqjhVQ2pLqovBRsC9b2vhuS42cxTCspSDdFvwwN+wnEyfUlHXXCwRUCsQR+JpIiT7X6LvgAku/iN2Lo7fkqbQIDAQAB",
   "permissions": [
     "activeTab",
     "contextMenus",
+    "nativeMessaging",
     "scripting",
     "storage"
   ],
@@ -13,7 +15,7 @@
     "service_worker": "service-worker.js"
   },
   "action": {
-    "default_title": "MAGINALIA Collector — 準備中",
+    "default_title": "MAGINALIA Collector",
     "default_popup": "popup.html",
     "default_icon": "icon..png"
   },
