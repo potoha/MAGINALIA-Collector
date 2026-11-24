@@ -19,7 +19,7 @@
         このブラウザー内の保留データを読み込んでいます。
       </p>
       <p id="details" class="details">
-        Private Shelfへの保存は未接続です。Hostへの送信は行いません。
+        保留中の引用は、まだ本棚に保存されていません。
       </p>
       <p id="permission-status" class="permission-status" role="status" aria-live="polite" hidden></p>
 
@@ -33,7 +33,7 @@
       <section class="host-check" aria-labelledby="host-check-heading">
         <h2 id="host-check-heading">MAGINALIAとの接続</h2>
         <p id="host-check-lead" class="host-check-lead">
-          この接続確認は開発用の暫定版です。このパソコンのMAGINALIA連携プログラムとつながるか、指定されたPrivate Shelfを確認します。確認だけを行い、引用の送信や保存はまだ行いません。
+          このパソコンのMAGINALIA連携プログラムとつながるか、MAGINALIAで設定したPrivate Shelfを確認します。確認だけを行い、引用は送信しません。
         </p>
         <button id="host-check-button" class="host-check-button" type="button">
           接続を確認
@@ -58,6 +58,9 @@
             <ul id="host-check-failure-list"></ul>
           </div>
         </div>
+        <button id="open-onboarding" class="onboarding-link" type="button">
+          準備状況と設定の案内を開く
+        </button>
       </section>
 
       <p class="data-loss-notice">

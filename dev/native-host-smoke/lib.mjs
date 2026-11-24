@@ -12,9 +12,10 @@
  * extension ID from the copied manifest `key` and refuses to delete anything
  * unless every part of that chain agrees.
  *
- * The experimental host descriptor accepts exactly four keys
- * (`experimental`, `shelfLocationPath`, `expectedShelfId`, `allowedOrigin`), so
- * the marker lives in the host manifest instead of the descriptor.
+ * This legacy smoke creates an exact four-key read-only descriptor
+ * (`experimental`, `shelfLocationPath`, `expectedShelfId`, `allowedOrigin`).
+ * The separate Collector E2E harness uses an additional test-only descriptor
+ * shape; this read-only smoke never enables writes.
  */
 import { createHash, generateKeyPairSync, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";

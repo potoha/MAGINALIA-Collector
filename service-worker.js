@@ -1,8 +1,8 @@
 // Native Messaging is only reachable from the extension service worker or an
-// extension page, so the helper bridge lives here rather than in page scripts.
+// extension page, so the Host bridge lives here rather than in page scripts.
 if (typeof importScripts === "function") {
   try {
-    importScripts("host-client.js");
+    importScripts("host-client.js", "outbox.js");
   } catch {
     console.warn("Collector helper client is unavailable.");
   }
@@ -329,7 +329,13 @@ function isExtensionPageSender(sender) {
   try {
     const senderUrl = new URL(sender.url);
     const extensionUrl = new URL(chrome.runtime.getURL(""));
-    return senderUrl.protocol === "chrome-extension:" && senderUrl.origin === extensionUrl.origin;
+    // Compare against this runtime's own extension URL (scheme differs by browser). Host is checked
+    // explicitly because non-special schemes can report an opaque "null" origin outside Chromium.
+    return (
+      senderUrl.protocol === extensionUrl.protocol &&
+      senderUrl.host === extensionUrl.host &&
+      senderUrl.origin === extensionUrl.origin
+    );
   } catch {
     return false;
   }
@@ -346,25 +352,105 @@ function unavailableHostReport(code) {
   };
 }
 
-// Reads the helper profile and asks the experimental helper for its health and
-// configured Shelf. Nothing is written and nothing is sent from the outbox, so a
-// success here must not be presented as a Shelf save.
+async function createConfiguredHostClient(api) {
+  return api.createHostClient({
+    hostName: await api.resolveHostName(chrome.storage?.local),
+    sendNativeMessage: (name, message, callback) => {
+      chrome.runtime.sendNativeMessage(name, message, callback);
+    },
+    getLastError: () => chrome.runtime.lastError,
+    extensionVersion: ownExtensionVersion()
+  });
+}
+
+function ownExtensionVersion() {
+  try {
+    return chrome.runtime.getManifest?.().version ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Asks the Host for its health and configured Shelf. Nothing is written and
+// nothing is sent from the Outbox, so a success here is not a Shelf save.
 async function checkHostConnection() {
   const api = globalThis.CollectorHostClient;
   if (!api?.createHostClient) {
     return { ok: true, report: unavailableHostReport("native-messaging-unavailable") };
   }
 
-  const profile = await api.loadHostProfile(chrome.storage?.local);
-  const client = api.createHostClient({
-    hostName: profile?.hostName ?? "",
-    sendNativeMessage: (name, message, callback) => {
-      chrome.runtime.sendNativeMessage(name, message, callback);
-    },
-    getLastError: () => chrome.runtime.lastError
-  });
-
+  const client = await createConfiguredHostClient(api);
   return { ok: true, report: await client.checkCompatibility() };
+}
+
+const savesInProgress = new Set();
+
+// Sends one pending Outbox quote to the Host exactly once, under its original
+// request ID. The Outbox entry is deleted only after a validated committed or
+// already-committed receipt. Every failure leaves the entry pending. Nothing here
+// retries or deletes on its own; a resend is a new explicit user action with the
+// same request ID, which the Host answers idempotently.
+async function savePendingQuote(requestId) {
+  const clientApi = globalThis.CollectorHostClient;
+  const outboxApi = globalThis.CollectorOutbox;
+  if (!clientApi?.createHostClient || !outboxApi?.create) return { ok: false, code: "native-messaging-unavailable" };
+  if (savesInProgress.has(requestId)) return { ok: false, code: "save-in-progress" };
+
+  savesInProgress.add(requestId);
+  try {
+    let item;
+    const outbox = outboxApi.create();
+    try {
+      item = await outbox.getPending(requestId);
+    } catch {
+      return { ok: false, code: "outbox-unavailable" };
+    }
+    if (!item || item.requestId !== requestId || item.kind !== "quote" || !item.payload || typeof item.payload !== "object") {
+      return { ok: false, code: "pending-quote-unavailable" };
+    }
+
+    const client = await createConfiguredHostClient(clientApi);
+    const payload = item.payload;
+    const quote = {
+      requestId: item.requestId,
+      quote: payload.quote,
+      url: payload.pageUrl,
+      getDate: payload.acquiredAt,
+      ...(payload.title ? { title: payload.title } : {}),
+      ...(payload.author ? { authors: [payload.author] } : {})
+    };
+
+    let saved;
+    try {
+      saved = await client.saveQuote(quote);
+    } catch (error) {
+      return { ok: false, code: typeof error?.code === "string" ? error.code : "host-save-failed" };
+    }
+
+    // saveQuote has already checked the receipt state, request ID, configured
+    // Shelf ID and ID/digest patterns; check the binding to this entry once more.
+    if (saved?.receipt?.requestId !== item.requestId) {
+      return { ok: false, code: "invalid-response" };
+    }
+
+    let queueCleared = false;
+    try {
+      queueCleared = (await outbox.deletePending(item.requestId)).deleted === true;
+    } catch {
+      queueCleared = false;
+    }
+    // A durable Host receipt is authoritative for the Shelf. If the local cleanup
+    // fails, the entry stays; a later resend returns already-committed.
+    return {
+      ok: true,
+      result: queueCleared ? "saved" : "saved-but-local-pending",
+      receipt: saved.receipt,
+      shelf: { name: saved.shelf.name },
+      queueCleared
+    };
+  } finally {
+    savesInProgress.delete(requestId);
+  }
 }
 
 function handleExtensionMessage(message, sender, sendResponse) {
@@ -375,6 +461,14 @@ function handleExtensionMessage(message, sender, sendResponse) {
     void checkHostConnection()
       .then((response) => sendResponse(response))
       .catch(() => sendResponse({ ok: false, code: "host-check-failed" }));
+    return true;
+  }
+
+  if (message?.type === "collector:save-pending-quote") {
+    if (!isCaptureRequestSender(sender, message.requestId)) return false;
+    void savePendingQuote(message.requestId)
+      .then((response) => sendResponse(response))
+      .catch(() => sendResponse({ ok: false, code: "host-save-failed" }));
     return true;
   }
 
@@ -406,7 +500,25 @@ function handleExtensionMessage(message, sender, sendResponse) {
   return false;
 }
 
-chrome.runtime.onInstalled.addListener(registerSelectionMenu);
+// Opens the first-run status page once, on a fresh install only. Updates and
+// browser restarts do not reopen it; the popup links to it instead.
+async function openOnboardingOnInstall(details) {
+  if (details?.reason !== "install" || !chrome.tabs?.create) {
+    return;
+  }
+  try {
+    await chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html"), active: true });
+  } catch {
+    console.warn("Collector first-run page could not be opened.");
+  }
+}
+
+function handleInstalled(details) {
+  registerSelectionMenu();
+  void openOnboardingOnInstall(details);
+}
+
+chrome.runtime.onInstalled.addListener(handleInstalled);
 chrome.runtime.onStartup.addListener(registerSelectionMenu);
 
 if (chrome.contextMenus?.onClicked) {
